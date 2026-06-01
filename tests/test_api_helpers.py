@@ -540,8 +540,19 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0]["ship_name"], "Wonder of the Seas")
         self.assertEqual(len(session.calls), 5)
         self.assertTrue(session.calls[0]["url"].endswith("/auth/json/authenticate"))
+        self.assertEqual(
+            session.calls[0]["headers"]["referer"],
+            "https://www.royalcaribbean.com/club-royale/signin",
+        )
         self.assertTrue(session.calls[1]["url"].endswith("/en/royal/web/v1/authorize"))
-        self.assertIn("/en/royal/web/v3/guestAccounts/", session.calls[2]["url"])
+        self.assertEqual(
+            session.calls[1]["headers"]["referer"],
+            "https://www.royalcaribbean.com/",
+        )
+        self.assertEqual(
+            session.calls[2]["url"],
+            "https://api.rccl.com/en/royal/web/v3/guestAccounts",
+        )
         self.assertIn("/api/casino/v2/offers/merged", session.calls[3]["url"])
 
 

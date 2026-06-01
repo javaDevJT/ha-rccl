@@ -18,6 +18,7 @@ CONF_TOKEN_EXPIRES_AT = "token_expires_at"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 DEFAULT_API_BASE_URL = "https://aws-prd.api.rccl.com"
+DEFAULT_CLUB_ROYALE_API_BASE_URL = "https://api.rccl.com"
 DEFAULT_WEB_BASE_URL = "https://www.royalcaribbean.com"
 DEFAULT_APP_KEY = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 DEFAULT_BRAND = "royal"

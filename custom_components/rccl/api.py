@@ -24,6 +24,7 @@ from .const import (
     DEFAULT_APP_KEY,
     DEFAULT_API_BASE_URL,
     DEFAULT_BRAND,
+    DEFAULT_CLUB_ROYALE_API_BASE_URL,
     DEFAULT_LANGUAGE,
     DEFAULT_OAUTH_CLIENT,
     DEFAULT_REQUEST_TIMEOUT,
@@ -100,11 +101,16 @@ class RCCLClient:
         app_key: str = DEFAULT_APP_KEY,
         api_base_url: str = DEFAULT_API_BASE_URL,
         web_base_url: str = DEFAULT_WEB_BASE_URL,
+        auth_referer: str | None = None,
+        authorize_referer: str | None = None,
         brand: str = DEFAULT_BRAND,
         language: str = DEFAULT_LANGUAGE,
         request_timeout: int | float = DEFAULT_REQUEST_TIMEOUT,
     ) -> RCCLCredentials:
         """Log in to RCCL and return API credentials."""
+
+        auth_referer = auth_referer or f"{web_base_url}/account/signin"
+        authorize_referer = authorize_referer or f"{web_base_url}/account/signin"
 
         auth_response = await cls._request_json(
             session,
@@ -117,7 +123,7 @@ class RCCLClient:
                 "content-type": "application/x-www-form-urlencoded",
                 HEADER_APP_KEY: app_key,
                 "origin": web_base_url,
-                "referer": f"{web_base_url}/account/signin",
+                "referer": auth_referer,
                 "user-agent": _USER_AGENT,
                 "X-OpenAM-Username": username,
                 "X-OpenAM-Password": password,
@@ -140,7 +146,7 @@ class RCCLClient:
                 "content-type": "application/json",
                 "AppKey": app_key,
                 "origin": web_base_url,
-                "referer": f"{web_base_url}/account/signin",
+                "referer": authorize_referer,
                 "user-agent": _USER_AGENT,
             },
             json_body={"client": DEFAULT_OAUTH_CLIENT, "tokenId": token_id},
@@ -181,6 +187,7 @@ class RCCLClient:
         app_key: str = DEFAULT_APP_KEY,
         api_base_url: str = DEFAULT_API_BASE_URL,
         web_base_url: str = DEFAULT_WEB_BASE_URL,
+        club_api_base_url: str = DEFAULT_CLUB_ROYALE_API_BASE_URL,
     ) -> list[JsonObject]:
         """Log in with a standalone web session and fetch Club Royale sailings."""
 
@@ -191,9 +198,13 @@ class RCCLClient:
             app_key=app_key,
             api_base_url=api_base_url,
             web_base_url=web_base_url,
+            auth_referer=f"{web_base_url}/club-royale/signin",
+            authorize_referer=f"{web_base_url}/",
         )
         client = cls(session, credentials)
-        account = await client.async_get_account()
+        account = await client.async_get_club_royale_account(
+            api_base_url=club_api_base_url
+        )
         club_royale = await client.async_get_club_royale_data(account)
         return club_royale_sailings({"club_royale": club_royale})
 
@@ -203,6 +214,18 @@ class RCCLClient:
         return await self._request(
             "GET",
             f"/en/royal/web/v3/guestAccounts/{self.account_id}",
+        )
+
+    async def async_get_club_royale_account(
+        self,
+        *,
+        api_base_url: str = DEFAULT_CLUB_ROYALE_API_BASE_URL,
+    ) -> JsonObject:
+        """Fetch the Club Royale web-session guest account profile."""
+
+        return await self._request_absolute(
+            "GET",
+            f"{api_base_url}/en/royal/web/v3/guestAccounts",
         )
 
     async def async_get_profile_bookings(self) -> JsonObject:
@@ -358,6 +381,37 @@ class RCCLClient:
                     retry_auth=False,
                 )
             raise
+        except RCCLApiError:
+            raise
+        except TimeoutError as err:
+            raise RCCLApiError("Timed out connecting to RCCL") from err
+        except Exception as err:
+            raise RCCLApiError(f"Unable to connect to RCCL: {err}") from err
+
+        errors = data.get("errors") if isinstance(data, dict) else None
+        if errors:
+            raise RCCLApiError(f"RCCL API returned {len(errors)} error(s)")
+        return data
+
+    async def _request_absolute(
+        self,
+        method: str,
+        url: str,
+        *,
+        json_body: JsonObject | None = None,
+        params: dict[str, str] | None = None,
+    ) -> JsonObject:
+        """Issue an API request to an absolute URL."""
+
+        try:
+            data = await self._request_json(
+                self._session,
+                method,
+                url,
+                headers=self._headers(),
+                json_body=json_body,
+                params=params,
+            )
         except RCCLApiError:
             raise
         except TimeoutError as err:

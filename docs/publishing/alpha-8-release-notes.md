@@ -4,6 +4,8 @@
 
 - Removed Club Royale polling from the normal RCCL account coordinator.
 - Club Royale card data now logs in through a standalone web session on demand.
+- Club Royale account lookup now uses the HAR-observed `api.rccl.com` guest
+  account endpoint rather than the normal account coordinator endpoint.
 - Club Royale auth/API failures are returned to the card instead of invalidating
   the Home Assistant config entry.
 
