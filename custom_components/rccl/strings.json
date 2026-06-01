@@ -1,0 +1,56 @@
+{
+  "title": "Royal Caribbean",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Royal Caribbean",
+        "description": "Enter RCCL account API header values from an authenticated browser session.",
+        "data": {
+          "access_token": "Access token",
+          "account_id": "Account ID",
+          "app_key": "App key",
+          "vds_id": "VDS ID",
+          "scan_interval": "Scan interval in minutes"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Royal Caribbean.",
+      "invalid_auth": "Royal Caribbean rejected these credentials.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This Royal Caribbean account is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "upcoming_cruises": {
+        "name": "Upcoming cruises"
+      },
+      "next_cruise_date": {
+        "name": "Next cruise date"
+      },
+      "upgrade_eligible_cruises": {
+        "name": "Upgrade eligible cruises"
+      },
+      "crown_anchor_tier": {
+        "name": "Crown & Anchor tier"
+      },
+      "crown_anchor_points": {
+        "name": "Crown & Anchor points"
+      },
+      "total_cruise_trips": {
+        "name": "Total cruise trips"
+      },
+      "total_cruise_nights": {
+        "name": "Total cruise nights"
+      }
+    },
+    "calendar": {
+      "cruises": {
+        "name": "Cruises"
+      }
+    }
+  }
+}

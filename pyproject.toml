@@ -1,0 +1,9 @@
+[project]
+name = "ha-rccl"
+version = "0.1.0"
+description = "Royal Caribbean custom integration for Home Assistant"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,28 @@
+"""Constants for the Royal Caribbean integration."""
+
+from __future__ import annotations
+
+from datetime import timedelta
+
+DOMAIN = "rccl"
+
+CONF_ACCESS_TOKEN = "access_token"
+CONF_ACCOUNT_ID = "account_id"
+CONF_APP_KEY = "app_key"
+CONF_VDS_ID = "vds_id"
+CONF_SCAN_INTERVAL = "scan_interval"
+
+DEFAULT_API_BASE_URL = "https://aws-prd.api.rccl.com"
+DEFAULT_SCAN_INTERVAL = 60
+MIN_SCAN_INTERVAL = 15
+DEFAULT_UPDATE_INTERVAL = timedelta(minutes=DEFAULT_SCAN_INTERVAL)
+
+HEADER_ACCESS_TOKEN = "access-token"
+HEADER_ACCOUNT_ID = "account-id"
+HEADER_APP_KEY = "appkey"
+HEADER_VDS_ID = "vds-id"
+
+REQ_APP_ID = "RCL-WEB"
+REQ_APP_VERSION = "1.0.0"
+
+PLATFORMS = ["sensor", "calendar"]
