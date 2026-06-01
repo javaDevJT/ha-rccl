@@ -21,6 +21,8 @@ that reads credentials from environment variables.
   summarizes the RCCL HAR without exposing account tokens or passenger details.
 - [research/2026-06-01-login-hang.md](research/2026-06-01-login-hang.md)
   records the config-flow hang diagnosis and timeout fix.
+- [research/2026-06-01-entity-names.md](research/2026-06-01-entity-names.md)
+  records the device-page entity naming fix.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [publishing/2026-06-01-alpha-1.md](publishing/2026-06-01-alpha-1.md)
@@ -33,3 +35,5 @@ that reads credentials from environment variables.
   describes the live-tested login request shape.
 - [publishing/alpha-5-release-notes.md](publishing/alpha-5-release-notes.md)
   describes the setup fix after successful config creation.
+- [publishing/alpha-6-release-notes.md](publishing/alpha-6-release-notes.md)
+  describes the entity display-name fix.

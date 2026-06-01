@@ -33,7 +33,8 @@ async def async_setup_entry(
 class RCCLCruiseCalendar(CoordinatorEntity[RCCLDataUpdateCoordinator], CalendarEntity):
     """Read-only RCCL cruise calendar."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
+    _attr_name = "Cruises"
     _attr_translation_key = "cruises"
 
     def __init__(self, coordinator: RCCLDataUpdateCoordinator, account_id: str) -> None:

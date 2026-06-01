@@ -36,6 +36,7 @@ class RCCLSensorEntityDescription(SensorEntityDescription):
 SENSOR_DESCRIPTIONS: tuple[RCCLSensorEntityDescription, ...] = (
     RCCLSensorEntityDescription(
         key="upcoming_cruises",
+        name="Upcoming cruises",
         translation_key="upcoming_cruises",
         icon="mdi:ferry",
         value_fn=lambda data: len(upcoming_bookings(data)),
@@ -45,6 +46,7 @@ SENSOR_DESCRIPTIONS: tuple[RCCLSensorEntityDescription, ...] = (
     ),
     RCCLSensorEntityDescription(
         key="next_cruise_date",
+        name="Next cruise date",
         translation_key="next_cruise_date",
         device_class=SensorDeviceClass.DATE,
         value_fn=lambda data: (
@@ -54,30 +56,35 @@ SENSOR_DESCRIPTIONS: tuple[RCCLSensorEntityDescription, ...] = (
     ),
     RCCLSensorEntityDescription(
         key="upgrade_eligible_cruises",
+        name="Upgrade eligible cruises",
         translation_key="upgrade_eligible_cruises",
         icon="mdi:arrow-up-bold-circle",
         value_fn=upgrade_eligible_count,
     ),
     RCCLSensorEntityDescription(
         key="crown_anchor_tier",
+        name="Crown & Anchor tier",
         translation_key="crown_anchor_tier",
         icon="mdi:crown",
         value_fn=lambda data: crown_anchor_value(data, "LoyaltyTier"),
     ),
     RCCLSensorEntityDescription(
         key="crown_anchor_points",
+        name="Crown & Anchor points",
         translation_key="crown_anchor_points",
         icon="mdi:star-circle",
         value_fn=lambda data: crown_anchor_value(data, "LoyaltyIndividualPoints"),
     ),
     RCCLSensorEntityDescription(
         key="total_cruise_trips",
+        name="Total cruise trips",
         translation_key="total_cruise_trips",
         icon="mdi:ship-wheel",
         value_fn=lambda data: loyalty_summary(data).get("totalTrips"),
     ),
     RCCLSensorEntityDescription(
         key="total_cruise_nights",
+        name="Total cruise nights",
         translation_key="total_cruise_nights",
         icon="mdi:weather-night",
         value_fn=lambda data: loyalty_summary(data).get("totalNights"),
@@ -106,7 +113,7 @@ class RCCLSensor(CoordinatorEntity[RCCLDataUpdateCoordinator], SensorEntity):
     """RCCL account sensor."""
 
     entity_description: RCCLSensorEntityDescription
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(
         self,
@@ -116,6 +123,7 @@ class RCCLSensor(CoordinatorEntity[RCCLDataUpdateCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_name = description.name
         self._attr_unique_id = f"{account_id}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, account_id)},
