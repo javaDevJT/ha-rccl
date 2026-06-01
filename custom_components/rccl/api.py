@@ -41,6 +41,7 @@ _USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
 )
+_CLUB_ROYALE_APPROVED_AGENCY_IDS = ["109638", "388809"]
 
 JsonObject = dict[str, Any]
 
@@ -212,6 +213,56 @@ class RCCLClient:
             f"/en/royal/web/v1/guestAccounts/loyalty/history/{self.account_id}",
         )
 
+    async def async_get_club_royale_data(self, account: JsonObject) -> JsonObject:
+        """Fetch Club Royale offers and per-offer sailing details."""
+
+        loyalty_id = club_royale_loyalty_id({"account": account})
+        if not loyalty_id:
+            raise RCCLApiError("RCCL account did not include a loyalty id")
+
+        offers = await self._web_request(
+            "POST",
+            "/api/casino/v2/offers/merged",
+            loyalty_id=loyalty_id,
+            json_body={
+                "sortBy": "offer.reserveByDate",
+                "sortDirection": "asc",
+                "limit": 100,
+                "approvedAgencyIds": _CLUB_ROYALE_APPROVED_AGENCY_IDS,
+                "page": 1,
+                "digitalRedemption": True,
+            },
+        )
+        detail_fetches = []
+        for offer in _club_royale_offers(offers):
+            campaign_offer = offer.get("campaignOffer", {})
+            if not isinstance(campaign_offer, dict):
+                continue
+            offer_code = campaign_offer.get("offerCode")
+            player_offer_id = offer.get("playerOfferId")
+            if not offer_code or not player_offer_id:
+                continue
+            detail_fetches.append(
+                self._web_request(
+                    "POST",
+                    "/api/casino/v2/offers/merged",
+                    loyalty_id=loyalty_id,
+                    json_body={
+                        "offerCode": offer_code,
+                        "playerOfferId": player_offer_id,
+                        "sortBy": "offer.reserveByDate",
+                        "sortDirection": "asc",
+                        "limit": 1,
+                        "page": 1,
+                        "approvedAgencyIds": _CLUB_ROYALE_APPROVED_AGENCY_IDS,
+                        "digitalRedemption": True,
+                    },
+                )
+            )
+
+        offer_details = await asyncio.gather(*detail_fetches) if detail_fetches else []
+        return {"offers": offers, "offer_details": list(offer_details)}
+
     async def async_get_data(self) -> JsonObject:
         """Fetch all data used by the Home Assistant entities."""
 
@@ -224,6 +275,10 @@ class RCCLClient:
             self._optional(self.async_get_loyalty_info, "loyalty"),
             self._optional(self.async_get_loyalty_history_summary, "loyalty_summary"),
             self._optional(self.async_get_loyalty_history, "loyalty_history"),
+            self._optional(
+                lambda: self.async_get_club_royale_data(account),
+                "club_royale",
+            ),
         )
 
         return {
@@ -233,6 +288,7 @@ class RCCLClient:
             "loyalty": optional[1],
             "loyalty_summary": optional[2],
             "loyalty_history": optional[3],
+            "club_royale": optional[4],
             "fetched_at": datetime.now().isoformat(timespec="seconds"),
         }
 
@@ -356,6 +412,60 @@ class RCCLClient:
         if self._credentials.vds_id:
             headers[HEADER_VDS_ID] = self._credentials.vds_id
         return headers
+
+    async def _web_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        loyalty_id: str,
+        json_body: JsonObject | None = None,
+        retry_auth: bool = True,
+    ) -> JsonObject:
+        """Issue an RCCL web API request."""
+
+        url = f"{self._credentials.web_base_url}{path}"
+        headers = self._web_headers(loyalty_id)
+
+        try:
+            return await self._request_json(
+                self._session,
+                method,
+                url,
+                headers=headers,
+                json_body=json_body,
+            )
+        except RCCLAuthenticationError:
+            if retry_auth and self._credentials.username and self._credentials.password:
+                await self.async_reauthenticate()
+                return await self._web_request(
+                    method,
+                    path,
+                    loyalty_id=loyalty_id,
+                    json_body=json_body,
+                    retry_auth=False,
+                )
+            raise
+        except RCCLApiError:
+            raise
+        except TimeoutError as err:
+            raise RCCLApiError("Timed out connecting to RCCL") from err
+        except Exception as err:
+            raise RCCLApiError(f"Unable to connect to RCCL: {err}") from err
+
+    def _web_headers(self, loyalty_id: str) -> dict[str, str]:
+        """Build headers expected by RCCL web casino APIs."""
+
+        return {
+            "accept": "application/json",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": self._credentials.web_base_url,
+            "referer": f"{self._credentials.web_base_url}/club-royale/offers",
+            "user-agent": _USER_AGENT,
+            "x-account-id": self.account_id,
+            "x-loyalty-id": loyalty_id,
+        }
 
 
 def credentials_from_oauth_response(
@@ -493,11 +603,62 @@ def loyalty_information(data: JsonObject) -> JsonObject:
     return info if isinstance(info, dict) else {}
 
 
+def account_loyalty_information(data: JsonObject) -> JsonObject:
+    """Return loyalty information from the account profile response."""
+
+    account_payload = payload(data, "account")
+    info = account_payload.get("loyaltyInformation", {})
+    return info if isinstance(info, dict) else {}
+
+
+def club_royale_loyalty_id(data: JsonObject) -> str | None:
+    """Return the cruise loyalty id required by Club Royale web APIs."""
+
+    loyalty = account_loyalty_information(data)
+    value = _first(
+        loyalty,
+        "crownAndAnchorId",
+        "crownAndAnchorNumber",
+        "cruiseLoyaltyId",
+    )
+    return str(value) if value else None
+
+
 def loyalty_summary(data: JsonObject) -> JsonObject:
-    """Return loyalty history summary."""
+    """Return loyalty history summary with history-derived fallbacks."""
 
     summary = payload(data, "loyalty_summary")
-    return summary if isinstance(summary, dict) else {}
+    result = dict(summary) if isinstance(summary, dict) else {}
+    history = loyalty_sailings(data)
+    derived = _derive_loyalty_summary(history)
+
+    total_trips = _first_int(
+        result,
+        "totalTrips",
+        "totalTripCount",
+        "totalCruiseTrips",
+        "totalCruises",
+        "completedCruises",
+    )
+    total_nights = _first_int(
+        result,
+        "totalNights",
+        "totalNightCount",
+        "totalCruiseNights",
+        "totalSailingNights",
+        "cruiseNights",
+    )
+
+    if (total_trips is None or total_trips == 0) and derived["totalTrips"] > 0:
+        total_trips = derived["totalTrips"]
+    if (total_nights is None or total_nights == 0) and derived["totalNights"] > 0:
+        total_nights = derived["totalNights"]
+
+    if total_trips is not None:
+        result["totalTrips"] = total_trips
+    if total_nights is not None:
+        result["totalNights"] = total_nights
+    return result
 
 
 def parse_rccl_date(value: Any) -> date | None:
@@ -567,11 +728,19 @@ def upgrade_eligible_count(data: JsonObject) -> int:
 
 
 def safe_booking_attributes(booking: JsonObject | None) -> JsonObject:
-    """Return booking attributes safe for Home Assistant state history."""
+    """Return booking attributes intentionally exposed in Home Assistant."""
 
     if not booking:
         return {}
-    return {
+    attributes = {
+        "booking_id": _first(
+            booking,
+            "bookingId",
+            "bookingID",
+            "reservationId",
+            "reservationNumber",
+            "id",
+        ),
         "sail_date": booking.get("sailDate"),
         "ship_code": booking.get("shipCode"),
         "package_code": booking.get("packageCode"),
@@ -579,6 +748,26 @@ def safe_booking_attributes(booking: JsonObject | None) -> JsonObject:
         "booking_status": booking.get("bookingStatus"),
         "stateroom_type": booking.get("stateroomType"),
     }
+    passengers = _passenger_attributes(booking)
+    if passengers:
+        attributes["passengers"] = passengers
+    return attributes
+
+
+def club_royale_sailings(data: JsonObject) -> list[JsonObject]:
+    """Return normalized Club Royale offer sailings for the custom card."""
+
+    club_royale = data.get("club_royale", {})
+    if not isinstance(club_royale, dict):
+        return []
+
+    rows: list[JsonObject] = []
+    for detail in club_royale.get("offer_details", []):
+        if not isinstance(detail, dict):
+            continue
+        for offer in _club_royale_offers(detail):
+            rows.extend(_normalize_club_royale_offer_sailings(offer))
+    return sorted(rows, key=lambda item: (item["sail_date"], item["ship_name"]))
 
 
 def cruise_events(data: JsonObject) -> list[JsonObject]:
@@ -661,3 +850,216 @@ def _int_or_default(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _club_royale_offers(response: JsonObject) -> list[JsonObject]:
+    """Return offers from a Club Royale response."""
+
+    offers = response.get("offers", [])
+    return [offer for offer in offers if isinstance(offer, dict)]
+
+
+def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]:
+    """Normalize all sailing rows from one Club Royale offer."""
+
+    campaign_offer = offer.get("campaignOffer", {})
+    if not isinstance(campaign_offer, dict):
+        return []
+
+    offer_name = campaign_offer.get("name") or offer.get("campaignName")
+    offer_type = campaign_offer.get("offerType", {})
+    offer_type_name = (
+        offer_type.get("name") if isinstance(offer_type, dict) else offer_type
+    )
+    occupancy_key, occupancy_label = _offer_occupancy(campaign_offer.get("description"))
+
+    rows = []
+    sailings = campaign_offer.get("sailings", [])
+    if not isinstance(sailings, list):
+        return rows
+
+    for sailing in sailings:
+        if not isinstance(sailing, dict):
+            continue
+        sail_date = parse_rccl_date(sailing.get("sailDate"))
+        if not sail_date:
+            continue
+        nights = _int_or_default(sailing.get("totalNights"), 0)
+        return_date = sail_date + timedelta(days=max(nights, 0))
+        ship_name = str(sailing.get("shipName") or sailing.get("shipCode") or "")
+        itinerary_name = _sailing_name(sailing)
+        room_types = _room_types(sailing)
+        row = {
+            "id": str(
+                sailing.get("id")
+                or f"{campaign_offer.get('offerCode')}:{sailing.get('shipCode')}:{sail_date}"
+            ),
+            "sail_date": sail_date.isoformat(),
+            "return_date": return_date.isoformat(),
+            "total_nights": nights,
+            "impacted_days": nights + 1,
+            "ship_code": sailing.get("shipCode"),
+            "ship_name": ship_name,
+            "itinerary_code": sailing.get("itineraryCode"),
+            "itinerary_name": itinerary_name,
+            "itinerary_description": sailing.get("itineraryDescription"),
+            "sailing_type": _nested_name(sailing.get("sailingType")),
+            "departure_port": _port(sailing.get("departurePort")),
+            "room_types": room_types,
+            "is_guarantee": sailing.get("isGTY") is True,
+            "cabin_guarantee": _cabin_guarantee(sailing, room_types),
+            "offer_name": offer_name,
+            "offer_code": campaign_offer.get("offerCode"),
+            "offer_type": offer_type_name,
+            "offer_occupancy": occupancy_key,
+            "offer_occupancy_label": occupancy_label,
+            "reserve_by_date": _date_string(campaign_offer.get("reserveByDate")),
+            "sail_by_date": _date_string(campaign_offer.get("sailByDate")),
+            "calendar_title": _calendar_title(itinerary_name, ship_name),
+        }
+        rows.append({key: value for key, value in row.items() if value not in (None, "")})
+    return rows
+
+
+def _sailing_name(sailing: JsonObject) -> str:
+    """Return the best human sailing name."""
+
+    return str(
+        sailing.get("itineraryName")
+        or _nested_name(sailing.get("sailingType"))
+        or sailing.get("itineraryDescription")
+        or "Royal Caribbean sailing"
+    )
+
+
+def _nested_name(value: Any) -> Any:
+    """Return a nested object's name field when present."""
+
+    return value.get("name") if isinstance(value, dict) else value
+
+
+def _port(value: Any) -> JsonObject | None:
+    """Normalize a port mapping."""
+
+    if not isinstance(value, dict):
+        return None
+    return {key: value.get(key) for key in ("code", "name") if value.get(key)}
+
+
+def _room_types(sailing: JsonObject) -> list[JsonObject]:
+    """Normalize room category data."""
+
+    room_types = sailing.get("roomTypeList", [])
+    if not isinstance(room_types, list):
+        return []
+    return [
+        {key: room.get(key) for key in ("code", "name") if room.get(key)}
+        for room in room_types
+        if isinstance(room, dict)
+    ]
+
+
+def _cabin_guarantee(sailing: JsonObject, room_types: list[JsonObject]) -> str | None:
+    """Return a compact cabin category/guarantee label."""
+
+    names = [str(room.get("name")) for room in room_types if room.get("name")]
+    if not names:
+        return "Guarantee" if sailing.get("isGTY") is True else None
+    label = " / ".join(names)
+    return f"{label} Guarantee" if sailing.get("isGTY") is True else label
+
+
+def _offer_occupancy(description: Any) -> tuple[str | None, str | None]:
+    """Infer offer occupancy from RCCL's offer description."""
+
+    text = str(description or "").lower()
+    if "for two" in text or "for 2" in text:
+        return "two_passengers", "Two passengers"
+    if "for one" in text or "for 1" in text:
+        return "one_passenger", "One passenger"
+    return None, None
+
+
+def _date_string(value: Any) -> str | None:
+    """Return an ISO date string from an RCCL date value."""
+
+    parsed = parse_rccl_date(value)
+    return parsed.isoformat() if parsed else None
+
+
+def _calendar_title(itinerary_name: str, ship_name: str) -> str:
+    """Return the card range-bar title."""
+
+    return f"{itinerary_name} - {ship_name}" if ship_name else itinerary_name
+
+
+def _first_int(source: JsonObject, *keys: str) -> int | None:
+    """Return the first integer-like value from a mapping."""
+
+    for key in keys:
+        if key not in source:
+            continue
+        try:
+            return int(source[key])
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _derive_loyalty_summary(sailings: list[JsonObject]) -> JsonObject:
+    """Derive total trips and nights from loyalty-history sailings."""
+
+    total_nights = 0
+    for sailing in sailings:
+        total_nights += _int_or_default(
+            _first(
+                sailing,
+                "itineraryNightsQuantity",
+                "numberOfNights",
+                "totalNights",
+                "nights",
+            ),
+            0,
+        )
+    return {"totalTrips": len(sailings), "totalNights": total_nights}
+
+
+def _passenger_attributes(booking: JsonObject) -> list[JsonObject]:
+    """Return normalized passenger identity attributes from a booking."""
+
+    for key in (
+        "passengers",
+        "passengerDetails",
+        "guests",
+        "guestDetails",
+        "bookingGuests",
+        "reservationGuests",
+    ):
+        passengers = booking.get(key)
+        if not isinstance(passengers, list):
+            continue
+        normalized = [
+            _normalize_passenger(passenger)
+            for passenger in passengers
+            if isinstance(passenger, dict)
+        ]
+        return [passenger for passenger in normalized if passenger]
+    return []
+
+
+def _normalize_passenger(passenger: JsonObject) -> JsonObject:
+    """Normalize passenger fields to stable Home Assistant attribute names."""
+
+    fields = {
+        "first_name": _first(passenger, "firstName", "first_name", "givenName"),
+        "last_name": _first(passenger, "lastName", "last_name", "surname"),
+        "guest_id": _first(passenger, "guestId", "guestID", "id", "passengerId"),
+        "crown_and_anchor_number": _first(
+            passenger,
+            "crownAndAnchorNumber",
+            "crownAndAnchorId",
+            "cruiseLoyaltyId",
+            "loyaltyNumber",
+        ),
+    }
+    return {key: value for key, value in fields.items() if value not in (None, "")}

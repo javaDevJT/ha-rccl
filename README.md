@@ -14,6 +14,7 @@ upgrade, loyalty, and sailing-history endpoints.
 - Account-level sensors for upcoming cruises, next sailing date, upgrade
   eligibility, loyalty tier/points, total trips, and total nights.
 - Read-only calendar entity for upcoming and historical sailings.
+- Club Royale offer sailing parser and custom Lovelace calendar card.
 - Diagnostics with sensitive config values redacted.
 
 ## Installation
@@ -37,12 +38,43 @@ The integration stores credentials in the Home Assistant config entry and uses
 them to obtain short-lived RCCL session tokens. Treat your Home Assistant
 configuration storage as sensitive.
 
+## Club Royale Card
+
+Add this dashboard resource:
+
+```yaml
+url: /rccl_static/club-royale-calendar-card.js
+type: module
+```
+
+Then add the card:
+
+```yaml
+type: custom:rccl-club-royale-calendar-card
+```
+
+Optional card settings:
+
+```yaml
+type: custom:rccl-club-royale-calendar-card
+title: Club Royale Sailings
+entry_id: your_config_entry_id
+month: "2026-06"
+```
+
+The card renders offer sailings as date ranges from departure through return
+day. Calendar bars show itinerary/sailing name and ship name; details include
+offer name/code, cabin guarantee/category, reserve-by date, sail-by date, and
+offer occupancy when RCCL exposes it.
+
 ## Limitations
 
 - RCCL may change or harden the web login flow. If login starts failing, Home
   Assistant will start a reauthentication flow.
-- The integration avoids writing raw booking IDs, passenger names, or stateroom
-  numbers into sensor attributes.
+- Booking IDs and passenger fields may be exposed in Home Assistant attributes
+  for account booking entities. Treat Home Assistant state history as sensitive.
+- Club Royale offer sailings generally do not include booking IDs or passenger
+  records, so the custom card does not display those fields.
 - Multifactor or bot-challenge flows are not implemented yet.
 
 ## Documentation

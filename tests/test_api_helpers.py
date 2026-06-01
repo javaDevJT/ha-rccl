@@ -39,6 +39,14 @@ SAMPLE_DATA = {
                 {
                     "bookingId": "future",
                     "bookingStatus": "BOOKED",
+                    "passengers": [
+                        {
+                            "firstName": "Test",
+                            "lastName": "Passenger",
+                            "guestId": "guest-1",
+                            "crownAndAnchorNumber": "12345",
+                        }
+                    ],
                     "numberOfNights": 7,
                     "packageCode": "CARIB",
                     "sailDate": "2026-07-04",
@@ -77,6 +85,69 @@ SAMPLE_DATA = {
             ]
         }
     },
+}
+
+
+SAMPLE_CLUB_ROYALE_DATA = {
+    "club_royale": {
+        "offers": {
+            "offers": [
+                {
+                    "playerOfferId": "player-offer-1",
+                    "campaignOffer": {
+                        "offerCode": "26SUM205",
+                        "name": "Fortune Flash",
+                    },
+                }
+            ]
+        },
+        "offer_details": [
+            {
+                "offers": [
+                    {
+                        "campaignName": "Fortune Flash",
+                        "playerOfferId": "player-offer-1",
+                        "bookingRequest": [
+                            {
+                                "id": "request-1",
+                                "sailings": [{"shipCode": "WN", "sailDate": "2026-06-26"}],
+                                "rooms": [{"guests": [{"firstName": "Hidden"}]}],
+                            }
+                        ],
+                        "campaignOffer": {
+                            "offerCode": "26SUM205",
+                            "offerType": {"code": "COMP", "name": "Complimentary"},
+                            "name": "Fortune Flash",
+                            "description": "Enjoy an Interior Room for Two",
+                            "reserveByDate": "2026-06-11T03:59:00.000Z",
+                            "sailByDate": "2026-10-31T00:00:00.000Z",
+                            "sailings": [
+                                {
+                                    "id": "sailing-1",
+                                    "isGTY": True,
+                                    "isCOMP": True,
+                                    "sailDate": "2026-06-26",
+                                    "shipCode": "WN",
+                                    "shipName": "Wonder of the Seas",
+                                    "itineraryCode": "WN03B001",
+                                    "itineraryName": "Bahamas & Perfect Day",
+                                    "itineraryDescription": "3 NIGHT BAHAMAS & PERFECT DAY CRUISE",
+                                    "sailingType": {
+                                        "name": "3 Night Bahamas & Perfect Day Cruise"
+                                    },
+                                    "departurePort": {"code": "MIA", "name": "Miami"},
+                                    "totalNights": 3,
+                                    "roomTypeList": [
+                                        {"code": "INTERIOR", "name": "Interior"}
+                                    ],
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        ],
+    }
 }
 
 
@@ -167,6 +238,63 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual([event["start"] for event in events], [date(2025, 5, 1), date(2026, 1, 10), date(2026, 7, 4)])
         self.assertEqual(events[-1]["end"], date(2026, 7, 12))
         self.assertIn("7 night cruise", events[-1]["description"])
+
+    def test_loyalty_summary_derives_totals_from_history_when_summary_is_empty(self) -> None:
+        """History sailings should backfill zero/empty RCCL summary totals."""
+
+        result = api.loyalty_summary(
+            {
+                **SAMPLE_DATA,
+                "loyalty_summary": {"payload": {"totalTrips": 0, "totalNights": 0}},
+                "loyalty_history": {
+                    "payload": {
+                        "sailings": [
+                            {"bookingId": "one", "itineraryNightsQuantity": "4"},
+                            {"bookingId": "two", "itineraryNightsQuantity": 7},
+                        ]
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(result["totalTrips"], 2)
+        self.assertEqual(result["totalNights"], 11)
+
+    def test_booking_attributes_include_booking_id_and_passengers(self) -> None:
+        """Home Assistant attributes should include booking and passenger details."""
+
+        result = api.safe_booking_attributes(api.next_booking(SAMPLE_DATA, today=date(2026, 6, 1)))
+
+        self.assertEqual(result["booking_id"], "future")
+        self.assertEqual(
+            result["passengers"],
+            [
+                {
+                    "first_name": "Test",
+                    "last_name": "Passenger",
+                    "guest_id": "guest-1",
+                    "crown_and_anchor_number": "12345",
+                }
+            ],
+        )
+
+    def test_club_royale_sailings_normalize_card_fields(self) -> None:
+        """Offer sailings should normalize into card rows without booking guests."""
+
+        result = api.club_royale_sailings(SAMPLE_CLUB_ROYALE_DATA)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["sail_date"], "2026-06-26")
+        self.assertEqual(result[0]["return_date"], "2026-06-29")
+        self.assertEqual(result[0]["ship_name"], "Wonder of the Seas")
+        self.assertEqual(result[0]["itinerary_name"], "Bahamas & Perfect Day")
+        self.assertEqual(result[0]["calendar_title"], "Bahamas & Perfect Day - Wonder of the Seas")
+        self.assertEqual(result[0]["cabin_guarantee"], "Interior Guarantee")
+        self.assertEqual(result[0]["offer_occupancy"], "two_passengers")
+        self.assertEqual(result[0]["offer_occupancy_label"], "Two passengers")
+        self.assertEqual(result[0]["offer_type"], "Complimentary")
+        self.assertNotIn("booking_id", result[0])
+        self.assertNotIn("passengers", result[0])
 
 
 class LoginTest(unittest.IsolatedAsyncioTestCase):
@@ -272,6 +400,56 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
                 "secret",
                 request_timeout=0.001,
             )
+
+    async def test_async_get_club_royale_data_fetches_offer_details(self) -> None:
+        """Club Royale polling should fetch list data and per-offer sailings."""
+
+        session = FakeSession(
+            [
+                FakeResponse(
+                    200,
+                    {
+                        "offers": [
+                            {
+                                "playerOfferId": "player-offer-1",
+                                "campaignOffer": {"offerCode": "26SUM205"},
+                            }
+                        ],
+                        "totalOffers": 1,
+                    },
+                ),
+                FakeResponse(200, {"offers": [{"campaignOffer": {"sailings": []}}]}),
+            ]
+        )
+        client = api.RCCLClient(
+            session,
+            api.RCCLCredentials(
+                access_token="access",
+                account_id="account-123",
+                vds_id="account-123",
+            ),
+        )
+
+        result = await client.async_get_club_royale_data(
+            {
+                "payload": {
+                    "loyaltyInformation": {
+                        "crownAndAnchorId": "364350586",
+                    }
+                }
+            }
+        )
+
+        self.assertEqual(result["offers"]["totalOffers"], 1)
+        self.assertEqual(len(result["offer_details"]), 1)
+        self.assertEqual(len(session.calls), 2)
+        self.assertTrue(session.calls[0]["url"].endswith("/api/casino/v2/offers/merged"))
+        self.assertEqual(session.calls[0]["headers"]["x-account-id"], "account-123")
+        self.assertEqual(session.calls[0]["headers"]["x-loyalty-id"], "364350586")
+        self.assertEqual(session.calls[0]["json"]["limit"], 100)
+        self.assertEqual(session.calls[1]["json"]["offerCode"], "26SUM205")
+        self.assertEqual(session.calls[1]["json"]["playerOfferId"], "player-offer-1")
+        self.assertEqual(session.calls[1]["json"]["limit"], 1)
 
 
 if __name__ == "__main__":

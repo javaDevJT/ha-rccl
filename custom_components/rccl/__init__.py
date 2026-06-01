@@ -33,6 +33,14 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import RCCLDataUpdateCoordinator
+from .frontend import async_setup_frontend
+
+
+async def async_setup(hass: HomeAssistant, config: dict[str, object]) -> bool:
+    """Set up integration-level RCCL frontend resources."""
+
+    await async_setup_frontend(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
