@@ -649,6 +649,29 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_sailingsFromEntities", card_source)
         self.assertIn("club_royale_sailing", card_source)
 
+    def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
+        """Club Royale setup should show labels and not fail on initial refresh."""
+
+        config_flow_source = (
+            ROOT / "custom_components" / "rccl" / "config_flow.py"
+        ).read_text()
+        init_source = (ROOT / "custom_components" / "rccl" / "__init__.py").read_text()
+        coordinator_source = (
+            ROOT / "custom_components" / "rccl" / "coordinator.py"
+        ).read_text()
+
+        self.assertIn('"account": "Royal Caribbean account"', config_flow_source)
+        self.assertIn('"club_royale": "Club Royale offers"', config_flow_source)
+        club_setup = init_source.split("async def _async_setup_club_royale_entry", 1)[1]
+        club_setup = club_setup.split("async def _credentials_from_entry", 1)[0]
+        self.assertNotIn("async_config_entry_first_refresh", club_setup)
+        self.assertIn("_async_refresh_club_royale_later", init_source)
+        club_coordinator = coordinator_source.split(
+            "class RCCLClubRoyaleDataUpdateCoordinator", 1
+        )[1]
+        self.assertIn("except RCCLAuthenticationError as err:", club_coordinator)
+        self.assertIn('UpdateFailed(f"Club Royale login failed: {err}")', club_coordinator)
+
 
 if __name__ == "__main__":
     unittest.main()

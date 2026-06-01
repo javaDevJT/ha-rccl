@@ -194,7 +194,10 @@ class RCCLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_menu(
             step_id="user",
-            menu_options=["account", ENTRY_TYPE_CLUB_ROYALE],
+            menu_options={
+                "account": "Royal Caribbean account",
+                "club_royale": "Club Royale offers",
+            },
         )
 
     async def async_step_account(

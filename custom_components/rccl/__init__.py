@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -37,6 +38,8 @@ from .const import (
 )
 from .coordinator import RCCLClubRoyaleDataUpdateCoordinator, RCCLDataUpdateCoordinator
 from .frontend import async_setup_frontend
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, object]) -> bool:
@@ -109,12 +112,24 @@ async def _async_setup_club_royale_entry(
         app_key=entry.data.get(CONF_APP_KEY, DEFAULT_APP_KEY),
         update_interval=interval,
     )
-    await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, _platforms_for_entry(entry))
+    refresh_task = hass.async_create_task(_async_refresh_club_royale_later(coordinator))
+    entry.async_on_unload(refresh_task.cancel)
     return True
+
+
+async def _async_refresh_club_royale_later(
+    coordinator: RCCLClubRoyaleDataUpdateCoordinator,
+) -> None:
+    """Refresh Club Royale data without blocking config-entry setup."""
+
+    try:
+        await coordinator.async_request_refresh()
+    except Exception as err:  # noqa: BLE001 - keep setup alive for visible entities.
+        _LOGGER.debug("Initial Club Royale refresh failed: %s", err)
 
 
 def _platforms_for_entry(entry: ConfigEntry) -> list[str]:

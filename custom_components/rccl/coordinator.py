@@ -84,7 +84,7 @@ class RCCLClubRoyaleDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]])
                 app_key=self._app_key,
             )
         except RCCLAuthenticationError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
+            raise UpdateFailed(f"Club Royale login failed: {err}") from err
         except RCCLApiError as err:
             raise UpdateFailed(str(err)) from err
         finally:

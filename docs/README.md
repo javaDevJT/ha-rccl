@@ -35,6 +35,8 @@ that reads credentials from environment variables.
 - [research/2026-06-01-club-royale-websocket-data.md](research/2026-06-01-club-royale-websocket-data.md)
   records the Home Assistant HAR evidence for the Club Royale websocket request
   hanging without a result frame.
+- [research/2026-06-01-club-royale-alpha-12-regressions.md](research/2026-06-01-club-royale-alpha-12-regressions.md)
+  records the unlabeled menu and Club Royale setup-failure diagnosis.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -67,3 +69,5 @@ that reads credentials from environment variables.
   describes the Club Royale websocket data-loading fix.
 - [publishing/alpha-11-release-notes.md](publishing/alpha-11-release-notes.md)
   describes the separate Club Royale config path and entity-backed card data.
+- [publishing/alpha-12-release-notes.md](publishing/alpha-12-release-notes.md)
+  describes the Club Royale config menu label and nonblocking setup fixes.
