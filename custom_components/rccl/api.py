@@ -82,6 +82,7 @@ class RCCLClient:
     def __init__(self, session: Any, credentials: RCCLCredentials) -> None:
         self._session = session
         self._credentials = credentials
+        self._club_royale_primed = False
 
     @property
     def account_id(self) -> str:
@@ -184,6 +185,7 @@ class RCCLClient:
             auth_referer=self._credentials.auth_referer,
             authorize_referer=self._credentials.authorize_referer,
         )
+        self._club_royale_primed = False
 
     @classmethod
     async def async_fetch_club_royale_sailings(
@@ -288,6 +290,12 @@ class RCCLClient:
     ) -> JsonObject:
         """Fetch Club Royale offers and per-offer sailing details by loyalty id."""
 
+        if not self._credentials.access_token and (
+            self._credentials.username and self._credentials.password
+        ):
+            await self.async_reauthenticate()
+        await self.async_prime_club_royale_session()
+
         offers = await self._web_request(
             "POST",
             "/api/casino/v2/offers/merged",
@@ -330,6 +338,28 @@ class RCCLClient:
 
         offer_details = await asyncio.gather(*detail_fetches) if detail_fetches else []
         return {"offers": offers, "offer_details": list(offer_details)}
+
+    async def async_prime_club_royale_session(self) -> None:
+        """Load the Club Royale offers page before calling same-origin APIs."""
+
+        if self._club_royale_primed:
+            return
+
+        await self._request_text(
+            self._session,
+            "GET",
+            f"{self._credentials.web_base_url}/club-royale/offers",
+            headers={
+                "accept": (
+                    "text/html,application/xhtml+xml,application/xml;"
+                    "q=0.9,*/*;q=0.8"
+                ),
+                "accept-language": "en-US,en;q=0.9",
+                "referer": f"{self._credentials.web_base_url}/club-royale/signin",
+                "user-agent": _USER_AGENT,
+            },
+        )
+        self._club_royale_primed = True
 
     async def async_get_data(self) -> JsonObject:
         """Fetch all data used by the Home Assistant entities."""
@@ -489,7 +519,43 @@ class RCCLClient:
 
         if auth_request and isinstance(data, dict) and data.get("error"):
             raise RCCLAuthenticationError(str(data.get("errorDescription") or data["error"]))
+        if not auth_request and isinstance(data, dict) and data.get("error"):
+            raise RCCLApiError(str(data.get("message") or data.get("code") or data["error"]))
         return data
+
+    @staticmethod
+    async def _request_text(
+        session: Any,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        params: dict[str, str] | None = None,
+        timeout: int | float = DEFAULT_REQUEST_TIMEOUT,
+    ) -> str:
+        """Issue a request and return text."""
+
+        request_kwargs: dict[str, Any] = {"headers": headers}
+        if params is not None:
+            request_kwargs["params"] = params
+
+        try:
+            async with asyncio.timeout(timeout):
+                async with session.request(method, url, **request_kwargs) as response:
+                    text = await response.text()
+                    if response.status in (401, 403):
+                        raise RCCLAuthenticationError(
+                            f"RCCL rejected credentials with HTTP {response.status}"
+                        )
+                    if response.status < 200 or response.status >= 300:
+                        raise RCCLApiError(f"RCCL API returned HTTP {response.status}")
+                    return text
+        except RCCLApiError:
+            raise
+        except TimeoutError as err:
+            raise RCCLApiError("Timed out connecting to RCCL") from err
+        except Exception as err:
+            raise RCCLApiError(f"Unable to connect to RCCL: {err}") from err
 
     def _headers(self) -> dict[str, str]:
         """Build headers expected by RCCL account APIs."""
@@ -532,6 +598,7 @@ class RCCLClient:
         except RCCLAuthenticationError:
             if retry_auth and self._credentials.username and self._credentials.password:
                 await self.async_reauthenticate()
+                await self.async_prime_club_royale_session()
                 return await self._web_request(
                     method,
                     path,
@@ -551,11 +618,15 @@ class RCCLClient:
         """Build headers expected by RCCL web casino APIs."""
 
         return {
-            "accept": "application/json",
+            "accept": "*/*",
             "accept-language": "en-US,en;q=0.9",
+            "authorization": f"Bearer {self._credentials.access_token}",
             "content-type": "application/json",
             "origin": self._credentials.web_base_url,
             "referer": f"{self._credentials.web_base_url}/club-royale/offers",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
             "user-agent": _USER_AGENT,
             "x-account-id": self.account_id,
             "x-loyalty-id": loyalty_id,

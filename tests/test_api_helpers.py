@@ -411,6 +411,7 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
 
         session = FakeSession(
             [
+                FakeResponse(200, {"html": "club royale offers page"}),
                 FakeResponse(
                     200,
                     {
@@ -447,14 +448,16 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["offers"]["totalOffers"], 1)
         self.assertEqual(len(result["offer_details"]), 1)
-        self.assertEqual(len(session.calls), 2)
-        self.assertTrue(session.calls[0]["url"].endswith("/api/casino/v2/offers/merged"))
-        self.assertEqual(session.calls[0]["headers"]["x-account-id"], "account-123")
-        self.assertEqual(session.calls[0]["headers"]["x-loyalty-id"], "364350586")
-        self.assertEqual(session.calls[0]["json"]["limit"], 100)
-        self.assertEqual(session.calls[1]["json"]["offerCode"], "26SUM205")
-        self.assertEqual(session.calls[1]["json"]["playerOfferId"], "player-offer-1")
-        self.assertEqual(session.calls[1]["json"]["limit"], 1)
+        self.assertEqual(len(session.calls), 3)
+        self.assertTrue(session.calls[0]["url"].endswith("/club-royale/offers"))
+        self.assertTrue(session.calls[1]["url"].endswith("/api/casino/v2/offers/merged"))
+        self.assertEqual(session.calls[1]["headers"]["x-account-id"], "account-123")
+        self.assertEqual(session.calls[1]["headers"]["x-loyalty-id"], "364350586")
+        self.assertEqual(session.calls[1]["headers"]["authorization"], "Bearer access")
+        self.assertEqual(session.calls[1]["json"]["limit"], 100)
+        self.assertEqual(session.calls[2]["json"]["offerCode"], "26SUM205")
+        self.assertEqual(session.calls[2]["json"]["playerOfferId"], "player-offer-1")
+        self.assertEqual(session.calls[2]["json"]["limit"], 1)
 
     async def test_async_get_data_does_not_fetch_club_royale(self) -> None:
         """Core account setup should not use the separate Club Royale session."""
@@ -551,6 +554,7 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
                         }
                     },
                 ),
+                FakeResponse(200, {"html": "club royale offers page"}),
                 FakeResponse(
                     200,
                     {
@@ -574,7 +578,7 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result[0]["ship_name"], "Wonder of the Seas")
-        self.assertEqual(len(session.calls), 5)
+        self.assertEqual(len(session.calls), 6)
         self.assertTrue(session.calls[0]["url"].endswith("/auth/json/authenticate"))
         self.assertEqual(
             session.calls[0]["headers"]["referer"],
@@ -589,7 +593,10 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
             session.calls[2]["url"],
             "https://api.rccl.com/en/royal/web/v3/guestAccounts",
         )
-        self.assertIn("/api/casino/v2/offers/merged", session.calls[3]["url"])
+        self.assertTrue(session.calls[3]["url"].endswith("/club-royale/offers"))
+        self.assertTrue(session.calls[4]["url"].endswith("/api/casino/v2/offers/merged"))
+        self.assertEqual(session.calls[4]["headers"]["authorization"], "Bearer access")
+        self.assertIn("/api/casino/v2/offers/merged", session.calls[5]["url"])
 
 
 class SourceContractTest(unittest.TestCase):
@@ -693,6 +700,13 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("CONF_ACCESS_TOKEN", config_flow_source)
         self.assertIn("auth_referer: str | None = None", api_source)
         self.assertIn("async_get_club_royale_data_for_loyalty_id", api_source)
+        self.assertIn("async_prime_club_royale_session", api_source)
+        self.assertIn("_request_text", api_source)
+        self.assertIn("/club-royale/offers", api_source)
+        self.assertIn(
+            '"authorization": f"Bearer {self._credentials.access_token}"',
+            api_source,
+        )
         self.assertIn("credentials_from_stored_data", init_source)
         club_coordinator = coordinator_source.split(
             "class RCCLClubRoyaleDataUpdateCoordinator", 1
