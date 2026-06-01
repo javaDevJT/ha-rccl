@@ -28,6 +28,8 @@ that reads credentials from environment variables.
 - [research/2026-06-01-loyalty-totals-and-booking-attributes.md](research/2026-06-01-loyalty-totals-and-booking-attributes.md)
   records the inaccurate total trip/night diagnosis and the decision to expose
   booking/passenger attributes in Home Assistant.
+- [research/2026-06-01-club-royale-session-split.md](research/2026-06-01-club-royale-session-split.md)
+  records why Club Royale uses a standalone login session.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -48,3 +50,5 @@ that reads credentials from environment variables.
   describes the entity display-name fix.
 - [publishing/alpha-7-release-notes.md](publishing/alpha-7-release-notes.md)
   describes the Club Royale offer card and totals fix.
+- [publishing/alpha-8-release-notes.md](publishing/alpha-8-release-notes.md)
+  describes the Club Royale standalone-session fix.

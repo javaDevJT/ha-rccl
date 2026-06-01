@@ -171,6 +171,32 @@ class RCCLClient:
             web_base_url=self._credentials.web_base_url,
         )
 
+    @classmethod
+    async def async_fetch_club_royale_sailings(
+        cls,
+        session: Any,
+        username: str,
+        password: str,
+        *,
+        app_key: str = DEFAULT_APP_KEY,
+        api_base_url: str = DEFAULT_API_BASE_URL,
+        web_base_url: str = DEFAULT_WEB_BASE_URL,
+    ) -> list[JsonObject]:
+        """Log in with a standalone web session and fetch Club Royale sailings."""
+
+        credentials = await cls.async_login(
+            session,
+            username,
+            password,
+            app_key=app_key,
+            api_base_url=api_base_url,
+            web_base_url=web_base_url,
+        )
+        client = cls(session, credentials)
+        account = await client.async_get_account()
+        club_royale = await client.async_get_club_royale_data(account)
+        return club_royale_sailings({"club_royale": club_royale})
+
     async def async_get_account(self) -> JsonObject:
         """Fetch the guest account profile."""
 
@@ -275,10 +301,6 @@ class RCCLClient:
             self._optional(self.async_get_loyalty_info, "loyalty"),
             self._optional(self.async_get_loyalty_history_summary, "loyalty_summary"),
             self._optional(self.async_get_loyalty_history, "loyalty_history"),
-            self._optional(
-                lambda: self.async_get_club_royale_data(account),
-                "club_royale",
-            ),
         )
 
         return {
@@ -288,7 +310,6 @@ class RCCLClient:
             "loyalty": optional[1],
             "loyalty_summary": optional[2],
             "loyalty_history": optional[3],
-            "club_royale": optional[4],
             "fetched_at": datetime.now().isoformat(timespec="seconds"),
         }
 

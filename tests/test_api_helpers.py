@@ -451,6 +451,99 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.calls[1]["json"]["playerOfferId"], "player-offer-1")
         self.assertEqual(session.calls[1]["json"]["limit"], 1)
 
+    async def test_async_get_data_does_not_fetch_club_royale(self) -> None:
+        """Core account setup should not use the separate Club Royale session."""
+
+        session = FakeSession(
+            [
+                FakeResponse(
+                    200,
+                    {
+                        "payload": {
+                            "loyaltyInformation": {
+                                "crownAndAnchorId": "364350586",
+                            }
+                        }
+                    },
+                ),
+                FakeResponse(200, {"payload": {"profileBookings": []}}),
+                FakeResponse(200, {"payload": []}),
+                FakeResponse(200, {"payload": {"loyaltyInformation": {}}}),
+                FakeResponse(200, {"payload": {}}),
+                FakeResponse(200, {"payload": {"sailings": []}}),
+                FakeResponse(403, {"message": "casino session rejected"}),
+            ]
+        )
+        client = api.RCCLClient(
+            session,
+            api.RCCLCredentials(
+                access_token="access",
+                account_id="account-123",
+                vds_id="account-123",
+            ),
+        )
+
+        result = await client.async_get_data()
+
+        self.assertNotIn("club_royale", result)
+        self.assertFalse(
+            any("/api/casino/" in str(call["url"]) for call in session.calls)
+        )
+
+    async def test_club_royale_fetch_logs_in_with_separate_session(self) -> None:
+        """The card data helper should log in and fetch offers in its own session."""
+
+        session = FakeSession(
+            [
+                FakeResponse(200, {"tokenId": "openam-token"}),
+                FakeResponse(
+                    200,
+                    {
+                        "access_token": "access",
+                        "refresh_token": "refresh",
+                        "id_token": fake_jwt({"vdsid": "account-123"}),
+                        "expires_in": 3600,
+                    },
+                ),
+                FakeResponse(
+                    200,
+                    {
+                        "payload": {
+                            "loyaltyInformation": {
+                                "crownAndAnchorId": "364350586",
+                            }
+                        }
+                    },
+                ),
+                FakeResponse(
+                    200,
+                    {
+                        "offers": [
+                            {
+                                "playerOfferId": "player-offer-1",
+                                "campaignOffer": {"offerCode": "26SUM205"},
+                            }
+                        ],
+                        "totalOffers": 1,
+                    },
+                ),
+                FakeResponse(200, SAMPLE_CLUB_ROYALE_DATA["club_royale"]["offer_details"][0]),
+            ]
+        )
+
+        result = await api.RCCLClient.async_fetch_club_royale_sailings(
+            session,
+            "person@example.com",
+            "secret",
+        )
+
+        self.assertEqual(result[0]["ship_name"], "Wonder of the Seas")
+        self.assertEqual(len(session.calls), 5)
+        self.assertTrue(session.calls[0]["url"].endswith("/auth/json/authenticate"))
+        self.assertTrue(session.calls[1]["url"].endswith("/en/royal/web/v1/authorize"))
+        self.assertIn("/en/royal/web/v3/guestAccounts/", session.calls[2]["url"])
+        self.assertIn("/api/casino/v2/offers/merged", session.calls[3]["url"])
+
 
 if __name__ == "__main__":
     unittest.main()

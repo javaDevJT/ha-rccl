@@ -60,6 +60,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
         ? await this._hass.callWS(message)
         : await this._hass.connection.sendMessagePromise(message);
       this._sailings = Array.isArray(result.sailings) ? result.sailings : [];
+      if (!this._sailings.length && Array.isArray(result.errors) && result.errors.length) {
+        this._error = result.errors.map((item) => item.message).join("; ");
+      }
       this._loaded = true;
       if (!this._selectedId || !this._sailings.some((item) => item.id === this._selectedId)) {
         this._selectedId = this._sailings[0]?.id;
