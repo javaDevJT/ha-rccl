@@ -240,6 +240,28 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(credentials.vds_id, "account-456")
         self.assertEqual(credentials.id_token, fake_jwt({"ignored": True}))
 
+    def test_credentials_from_stored_data_preserves_reauth_fields(self) -> None:
+        """Setup should use stored tokens while retaining username/password."""
+
+        credentials = api.credentials_from_stored_data(
+            {
+                "access_token": "stored-access",
+                "account_id": "stored-account",
+                "app_key": "stored-app-key",
+                "username": "person@example.com",
+                "password": "secret",
+                "refresh_token": "stored-refresh",
+                "id_token": "stored-id",
+                "token_expires_at": 123,
+            }
+        )
+
+        self.assertEqual(credentials.access_token, "stored-access")
+        self.assertEqual(credentials.account_id, "stored-account")
+        self.assertEqual(credentials.vds_id, "stored-account")
+        self.assertEqual(credentials.username, "person@example.com")
+        self.assertEqual(credentials.password, "secret")
+
     async def test_async_login_times_out_instead_of_hanging(self) -> None:
         """A stalled RCCL auth request should fail with a bounded error."""
 

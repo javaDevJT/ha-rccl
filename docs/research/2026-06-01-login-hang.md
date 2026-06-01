@@ -39,3 +39,18 @@ The sanitized live smoke test completed the full Python auth path:
 - access token, account id, and profile payload were present.
 
 The test did not print token values, account IDs, or credentials.
+
+## Setup Failure After Successful Config Creation
+
+After the config flow could be created, Home Assistant setup immediately failed
+with `RCCL did not return a login token`.
+
+Root cause: `async_setup_entry` performed a second login whenever
+username/password were stored, even though the config flow had already stored a
+fresh access token and account id. The second immediate login could return a
+different auth shape or no `tokenId`, causing setup to fail.
+
+Fix: setup now prefers stored `access_token` and `account_id` and only logs in
+from username/password when no stored session exists. Username/password are
+still attached to runtime credentials so later 401/403 responses can trigger
+automatic reauth.

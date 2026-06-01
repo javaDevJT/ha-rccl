@@ -9,7 +9,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import RCCLApiError, RCCLAuthenticationError, RCCLClient, RCCLCredentials
+from .api import (
+    RCCLApiError,
+    RCCLAuthenticationError,
+    RCCLClient,
+    RCCLCredentials,
+    credentials_from_stored_data,
+)
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
@@ -73,6 +79,9 @@ async def _credentials_from_entry(
     entry: ConfigEntry,
 ) -> RCCLCredentials:
     """Build fresh RCCL credentials from a config entry."""
+
+    if entry.data.get(CONF_ACCESS_TOKEN) and entry.data.get(CONF_ACCOUNT_ID):
+        return credentials_from_stored_data(dict(entry.data))
 
     if entry.data.get(CONF_USERNAME) and entry.data.get(CONF_PASSWORD):
         credentials = await RCCLClient.async_login(

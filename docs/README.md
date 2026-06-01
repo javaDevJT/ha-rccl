@@ -31,3 +31,5 @@ that reads credentials from environment variables.
   describes the config-flow timeout fix.
 - [publishing/alpha-4-release-notes.md](publishing/alpha-4-release-notes.md)
   describes the live-tested login request shape.
+- [publishing/alpha-5-release-notes.md](publishing/alpha-5-release-notes.md)
+  describes the setup fix after successful config creation.

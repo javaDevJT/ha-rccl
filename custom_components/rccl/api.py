@@ -12,6 +12,15 @@ import time
 from typing import Any
 
 from .const import (
+    CONF_ACCESS_TOKEN,
+    CONF_ACCOUNT_ID,
+    CONF_APP_KEY,
+    CONF_ID_TOKEN,
+    CONF_PASSWORD,
+    CONF_REFRESH_TOKEN,
+    CONF_TOKEN_EXPIRES_AT,
+    CONF_USERNAME,
+    CONF_VDS_ID,
     DEFAULT_APP_KEY,
     DEFAULT_API_BASE_URL,
     DEFAULT_BRAND,
@@ -391,6 +400,22 @@ def credentials_from_oauth_response(
         password=password,
         api_base_url=api_base_url,
         web_base_url=web_base_url,
+    )
+
+
+def credentials_from_stored_data(data: JsonObject) -> RCCLCredentials:
+    """Create runtime credentials from stored Home Assistant entry data."""
+
+    return RCCLCredentials(
+        access_token=str(data[CONF_ACCESS_TOKEN]),
+        account_id=str(data[CONF_ACCOUNT_ID]),
+        app_key=str(data.get(CONF_APP_KEY, DEFAULT_APP_KEY)),
+        vds_id=data.get(CONF_VDS_ID) or data.get(CONF_ACCOUNT_ID),
+        refresh_token=data.get(CONF_REFRESH_TOKEN),
+        id_token=data.get(CONF_ID_TOKEN),
+        expires_at=data.get(CONF_TOKEN_EXPIRES_AT),
+        username=data.get(CONF_USERNAME),
+        password=data.get(CONF_PASSWORD),
     )
 
 
