@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import json
 import logging
+import time
 from typing import Any
 
 from .const import (
+    DEFAULT_APP_KEY,
     DEFAULT_API_BASE_URL,
+    DEFAULT_BRAND,
+    DEFAULT_LANGUAGE,
+    DEFAULT_OAUTH_CLIENT,
+    DEFAULT_WEB_BASE_URL,
     HEADER_ACCESS_TOKEN,
     HEADER_ACCOUNT_ID,
     HEADER_APP_KEY,
@@ -38,9 +45,15 @@ class RCCLCredentials:
 
     access_token: str
     account_id: str
-    app_key: str
+    app_key: str = DEFAULT_APP_KEY
     vds_id: str | None = None
+    refresh_token: str | None = None
+    id_token: str | None = None
+    expires_at: int | None = None
+    username: str | None = None
+    password: str | None = None
     api_base_url: str = DEFAULT_API_BASE_URL
+    web_base_url: str = DEFAULT_WEB_BASE_URL
 
 
 class RCCLClient:
@@ -55,6 +68,81 @@ class RCCLClient:
         """Return the configured account id."""
 
         return self._credentials.account_id
+
+    @property
+    def credentials(self) -> RCCLCredentials:
+        """Return the active credentials."""
+
+        return self._credentials
+
+    @classmethod
+    async def async_login(
+        cls,
+        session: Any,
+        username: str,
+        password: str,
+        *,
+        app_key: str = DEFAULT_APP_KEY,
+        api_base_url: str = DEFAULT_API_BASE_URL,
+        web_base_url: str = DEFAULT_WEB_BASE_URL,
+        brand: str = DEFAULT_BRAND,
+        language: str = DEFAULT_LANGUAGE,
+    ) -> RCCLCredentials:
+        """Log in to RCCL and return API credentials."""
+
+        auth_response = await cls._request_json(
+            session,
+            "POST",
+            f"{web_base_url}/auth/json/authenticate",
+            headers={
+                "accept": "application/json",
+                "accept-api-version": "resource=2.0, protocol=1.0",
+                "content-type": "application/json",
+                HEADER_APP_KEY: app_key,
+                "X-OpenAM-Username": username,
+                "X-OpenAM-Password": password,
+            },
+            auth_request=True,
+        )
+        token_id = auth_response.get("tokenId")
+        if not token_id:
+            raise RCCLAuthenticationError("RCCL did not return a login token")
+
+        oauth_response = await cls._request_json(
+            session,
+            "POST",
+            f"{api_base_url}/v1/oauth2-authorize/{language}/{brand}/web/v1/authorize",
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+                "AppKey": app_key,
+            },
+            json_body={"client": DEFAULT_OAUTH_CLIENT, "tokenId": token_id},
+            auth_request=True,
+        )
+        return credentials_from_oauth_response(
+            oauth_response,
+            username=username,
+            password=password,
+            app_key=app_key,
+            api_base_url=api_base_url,
+            web_base_url=web_base_url,
+        )
+
+    async def async_reauthenticate(self) -> None:
+        """Refresh credentials by logging in again."""
+
+        if not self._credentials.username or not self._credentials.password:
+            raise RCCLAuthenticationError("No RCCL username/password available")
+
+        self._credentials = await self.async_login(
+            self._session,
+            self._credentials.username,
+            self._credentials.password,
+            app_key=self._credentials.app_key,
+            api_base_url=self._credentials.api_base_url,
+            web_base_url=self._credentials.web_base_url,
+        )
 
     async def async_get_account(self) -> JsonObject:
         """Fetch the guest account profile."""
@@ -140,6 +228,7 @@ class RCCLClient:
         *,
         json_body: JsonObject | None = None,
         params: dict[str, str] | None = None,
+        retry_auth: bool = True,
     ) -> JsonObject:
         """Issue an API request."""
 
@@ -147,13 +236,58 @@ class RCCLClient:
         headers = self._headers()
 
         try:
-            async with self._session.request(
+            data = await self._request_json(
+                self._session,
                 method,
                 url,
                 headers=headers,
-                json=json_body,
+                json_body=json_body,
                 params=params,
-            ) as response:
+            )
+        except RCCLAuthenticationError:
+            if retry_auth and self._credentials.username and self._credentials.password:
+                await self.async_reauthenticate()
+                return await self._request(
+                    method,
+                    path,
+                    json_body=json_body,
+                    params=params,
+                    retry_auth=False,
+                )
+            raise
+        except RCCLApiError:
+            raise
+        except TimeoutError as err:
+            raise RCCLApiError("Timed out connecting to RCCL") from err
+        except Exception as err:
+            raise RCCLApiError(f"Unable to connect to RCCL: {err}") from err
+
+        errors = data.get("errors") if isinstance(data, dict) else None
+        if errors:
+            raise RCCLApiError(f"RCCL API returned {len(errors)} error(s)")
+        return data
+
+    @staticmethod
+    async def _request_json(
+        session: Any,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json_body: JsonObject | None = None,
+        params: dict[str, str] | None = None,
+        auth_request: bool = False,
+    ) -> JsonObject:
+        """Issue a request and parse a JSON response."""
+
+        request_kwargs: dict[str, Any] = {"headers": headers}
+        if json_body is not None:
+            request_kwargs["json"] = json_body
+        if params is not None:
+            request_kwargs["params"] = params
+
+        try:
+            async with session.request(method, url, **request_kwargs) as response:
                 text = await response.text()
                 if response.status in (401, 403):
                     raise RCCLAuthenticationError(
@@ -172,9 +306,8 @@ class RCCLClient:
         except Exception as err:
             raise RCCLApiError(f"Unable to connect to RCCL: {err}") from err
 
-        errors = data.get("errors") if isinstance(data, dict) else None
-        if errors:
-            raise RCCLApiError(f"RCCL API returned {len(errors)} error(s)")
+        if auth_request and isinstance(data, dict) and data.get("error"):
+            raise RCCLAuthenticationError(str(data.get("errorDescription") or data["error"]))
         return data
 
     def _headers(self) -> dict[str, str]:
@@ -192,6 +325,86 @@ class RCCLClient:
         if self._credentials.vds_id:
             headers[HEADER_VDS_ID] = self._credentials.vds_id
         return headers
+
+
+def credentials_from_oauth_response(
+    response: JsonObject,
+    *,
+    username: str,
+    password: str,
+    app_key: str = DEFAULT_APP_KEY,
+    api_base_url: str = DEFAULT_API_BASE_URL,
+    web_base_url: str = DEFAULT_WEB_BASE_URL,
+) -> RCCLCredentials:
+    """Create credentials from RCCL's authorize response."""
+
+    data = response.get("payload", response)
+    if not isinstance(data, dict):
+        raise RCCLAuthenticationError("RCCL returned an invalid login response")
+
+    access_token = _first(data, "access_token", "accessToken")
+    id_token = _first(data, "id_token", "idToken", "openIdToken")
+    refresh_token = _first(data, "refresh_token", "refreshToken")
+    expires_in = _first(data, "expires_in", "expiresIn", "tokenExpiration")
+    claims = decode_jwt_payload(id_token) if id_token else {}
+    account_id = (
+        _first(data, "accountId", "account_id", "vdsId", "vds_id")
+        or _first(claims, "accountId", "account_id", "vdsId", "vds_id", "vdsid")
+    )
+
+    if not access_token:
+        raise RCCLAuthenticationError("RCCL did not return an access token")
+    if not account_id:
+        raise RCCLAuthenticationError("RCCL did not return an account id")
+
+    return RCCLCredentials(
+        access_token=str(access_token),
+        account_id=str(account_id),
+        app_key=app_key,
+        vds_id=str(account_id),
+        refresh_token=str(refresh_token) if refresh_token else None,
+        id_token=str(id_token) if id_token else None,
+        expires_at=_expires_at(expires_in),
+        username=username,
+        password=password,
+        api_base_url=api_base_url,
+        web_base_url=web_base_url,
+    )
+
+
+def decode_jwt_payload(token: str) -> JsonObject:
+    """Decode an unsigned JWT payload without validating it."""
+
+    parts = token.split(".")
+    if len(parts) < 2:
+        return {}
+    payload_part = parts[1]
+    padded = payload_part + "=" * (-len(payload_part) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        payload_data = json.loads(raw.decode("utf-8"))
+    except (ValueError, json.JSONDecodeError):
+        return {}
+    return payload_data if isinstance(payload_data, dict) else {}
+
+
+def _first(source: JsonObject, *keys: str) -> Any:
+    """Return the first present value from a mapping."""
+
+    for key in keys:
+        value = source.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _expires_at(expires_in: Any) -> int | None:
+    """Return an epoch timestamp from an expires-in value."""
+
+    try:
+        return int(time.time()) + int(expires_in)
+    except (TypeError, ValueError):
+        return None
 
 
 def payload(data: JsonObject, key: str) -> Any:

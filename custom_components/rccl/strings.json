@@ -4,12 +4,19 @@
     "step": {
       "user": {
         "title": "Connect Royal Caribbean",
-        "description": "Enter RCCL account API header values from an authenticated browser session.",
+        "description": "Sign in with your Royal Caribbean account.",
         "data": {
-          "access_token": "Access token",
-          "account_id": "Account ID",
-          "app_key": "App key",
-          "vds_id": "VDS ID",
+          "username": "Email",
+          "password": "Password",
+          "scan_interval": "Scan interval in minutes"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Royal Caribbean",
+        "description": "Sign in again to refresh your Royal Caribbean session.",
+        "data": {
+          "username": "Email",
+          "password": "Password",
           "scan_interval": "Scan interval in minutes"
         }
       }
@@ -20,7 +27,8 @@
       "unknown": "Unexpected error."
     },
     "abort": {
-      "already_configured": "This Royal Caribbean account is already configured."
+      "already_configured": "This Royal Caribbean account is already configured.",
+      "reauth_successful": "Royal Caribbean reauthentication was successful."
     }
   },
   "entity": {

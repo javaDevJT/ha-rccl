@@ -12,15 +12,20 @@ HACS expects one integration under `custom_components/<domain>/`, plus a root
 
 ## Authentication Strategy
 
-Use a token/header based config flow:
+Use a username/password config flow:
 
-- `access-token`
-- `account-id`
-- `appkey`
-- optional `vds-id`
+- Royal Caribbean account email
+- Royal Caribbean account password
 
-This avoids hard-coding personal values from the HAR and avoids guessing at the
-browser login flow while auth response bodies are unavailable.
+The client follows the RCCL web login flow observed in the HAR and bundled JS:
+
+1. `POST /auth/json/authenticate` with OpenAM username/password headers.
+2. `POST /v1/oauth2-authorize/en/royal/web/v1/authorize` with the returned
+   `tokenId`.
+3. Store derived tokens and account id in the config entry.
+
+Users should never have to paste `access-token`, `account-id`, `appkey`, or
+`vds-id` into the configurator.
 
 ## Polling Model
 
@@ -34,8 +39,8 @@ The coordinator polls every 60 minutes by default and fetches:
 - loyalty history summary
 - loyalty sailing history
 
-Authentication failures should surface as config-entry auth failures so the user
-can reconfigure fresh token values.
+Authentication failures should trigger reauthentication so the user can enter
+fresh RCCL credentials.
 
 The coordinator is stored on `ConfigEntry.runtime_data` and mirrored into
 `hass.data` for simple fallback access.

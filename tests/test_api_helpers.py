@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import date
 import importlib
+import json
 from pathlib import Path
 import sys
 import types
@@ -77,6 +79,45 @@ SAMPLE_DATA = {
 }
 
 
+class FakeResponse:
+    """Minimal async response for client tests."""
+
+    def __init__(self, status: int, payload: dict[str, object]) -> None:
+        self.status = status
+        self._payload = payload
+
+    async def __aenter__(self) -> "FakeResponse":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+    async def text(self) -> str:
+        return json.dumps(self._payload)
+
+
+class FakeSession:
+    """Minimal aiohttp-like session for client tests."""
+
+    def __init__(self, responses: list[FakeResponse]) -> None:
+        self._responses = responses
+        self.calls: list[dict[str, object]] = []
+
+    def request(self, method: str, url: str, **kwargs: object) -> FakeResponse:
+        self.calls.append({"method": method, "url": url, **kwargs})
+        return self._responses.pop(0)
+
+
+def fake_jwt(payload: dict[str, object]) -> str:
+    """Return an unsigned JWT for tests."""
+
+    def encode(value: dict[str, object]) -> str:
+        raw = json.dumps(value, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    return f"{encode({'alg': 'none'})}.{encode(payload)}."
+
+
 class ApiHelperTest(unittest.TestCase):
     """Exercise pure API helper behavior."""
 
@@ -107,6 +148,73 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual([event["start"] for event in events], [date(2025, 5, 1), date(2026, 1, 10), date(2026, 7, 4)])
         self.assertEqual(events[-1]["end"], date(2026, 7, 12))
         self.assertIn("7 night cruise", events[-1]["description"])
+
+
+class LoginTest(unittest.IsolatedAsyncioTestCase):
+    """Exercise login parsing without Home Assistant."""
+
+    async def test_async_login_uses_username_password_and_derives_account_id(self) -> None:
+        """The client should perform the RCCL two-step login flow."""
+
+        session = FakeSession(
+            [
+                FakeResponse(200, {"tokenId": "openam-token"}),
+                FakeResponse(
+                    200,
+                    {
+                        "access_token": "access",
+                        "refresh_token": "refresh",
+                        "id_token": fake_jwt({"vdsid": "account-123"}),
+                        "expires_in": 3600,
+                    },
+                ),
+            ]
+        )
+
+        credentials = await api.RCCLClient.async_login(
+            session,
+            "person@example.com",
+            "secret",
+        )
+
+        self.assertEqual(credentials.account_id, "account-123")
+        self.assertEqual(credentials.access_token, "access")
+        self.assertEqual(credentials.refresh_token, "refresh")
+        self.assertEqual(credentials.username, "person@example.com")
+        self.assertEqual(credentials.password, "secret")
+        self.assertEqual(len(session.calls), 2)
+        self.assertTrue(session.calls[0]["url"].endswith("/auth/json/authenticate"))
+        self.assertEqual(
+            session.calls[0]["headers"]["X-OpenAM-Username"],
+            "person@example.com",
+        )
+        self.assertEqual(session.calls[0]["headers"]["X-OpenAM-Password"], "secret")
+        self.assertTrue(session.calls[1]["url"].endswith("/en/royal/web/v1/authorize"))
+        self.assertEqual(
+            session.calls[1]["json"],
+            {"client": "login-component", "tokenId": "openam-token"},
+        )
+
+    def test_credentials_from_wrapped_oauth_response(self) -> None:
+        """The parser should also support RCCL's account-web payload spelling."""
+
+        credentials = api.credentials_from_oauth_response(
+            {
+                "payload": {
+                    "accessToken": "access",
+                    "refreshToken": "refresh",
+                    "accountId": "account-456",
+                    "openIdToken": fake_jwt({"ignored": True}),
+                    "tokenExpiration": 3600,
+                }
+            },
+            username="person@example.com",
+            password="secret",
+        )
+
+        self.assertEqual(credentials.account_id, "account-456")
+        self.assertEqual(credentials.vds_id, "account-456")
+        self.assertEqual(credentials.id_token, fake_jwt({"ignored": True}))
 
 
 if __name__ == "__main__":

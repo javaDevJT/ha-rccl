@@ -19,3 +19,5 @@ implementation work discovers something useful.
   explains the token-based MVP and the Home Assistant entities.
 - [publishing/2026-06-01-alpha-1.md](publishing/2026-06-01-alpha-1.md)
   tracks the alpha 1 GitHub publishing flow.
+- [publishing/alpha-2-release-notes.md](publishing/alpha-2-release-notes.md)
+  describes the login-flow fix after alpha 1.

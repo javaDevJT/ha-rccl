@@ -3,11 +3,9 @@
 Custom Home Assistant integration for importing Royal Caribbean account data into
 Home Assistant through HACS.
 
-This repository currently implements a token-based first pass. It uses account
-API headers captured from a browser session and polls RCCL account, booking,
-upgrade, loyalty, and sailing-history endpoints. Automated username/password
-login is intentionally left out until the RCCL auth flow can be researched with
-complete response bodies and without depending on brittle browser-only behavior.
+This repository logs in with Royal Caribbean account credentials, derives the
+session headers used by RCCL's web account APIs, and polls account, booking,
+upgrade, loyalty, and sailing-history endpoints.
 
 ## Features
 
@@ -29,25 +27,23 @@ complete response bodies and without depending on brittle browser-only behavior.
 
 ## Required Values
 
-The current config flow asks for:
+The config flow asks for:
 
-- `access-token`
-- `account-id`
-- `appkey`
-- optional `vds-id`
+- Royal Caribbean account email
+- Royal Caribbean account password
+- optional scan interval
 
-These are request headers used by the RCCL web account APIs. Browser developer
-tools can show them on calls to `aws-prd.api.rccl.com`, for example the guest
-account or profile bookings endpoints. Treat all values as secrets.
+The integration stores credentials in the Home Assistant config entry and uses
+them to obtain short-lived RCCL session tokens. Treat your Home Assistant
+configuration storage as sensitive.
 
 ## Limitations
 
-- RCCL may expire tokens quickly; reconfigure the integration with fresh header
-  values if polling starts returning authentication errors.
+- RCCL may change or harden the web login flow. If login starts failing, Home
+  Assistant will start a reauthentication flow.
 - The integration avoids writing raw booking IDs, passenger names, or stateroom
   numbers into sensor attributes.
-- The HAR showed the login/authorize sequence, but the saved auth response
-  bodies were empty, so this version does not attempt automated login.
+- Multifactor or bot-challenge flows are not implemented yet.
 
 ## Documentation
 

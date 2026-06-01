@@ -6,13 +6,23 @@ from datetime import timedelta
 
 DOMAIN = "rccl"
 
+CONF_USERNAME = "username"
+CONF_PASSWORD = "password"
 CONF_ACCESS_TOKEN = "access_token"
 CONF_ACCOUNT_ID = "account_id"
 CONF_APP_KEY = "app_key"
 CONF_VDS_ID = "vds_id"
+CONF_REFRESH_TOKEN = "refresh_token"
+CONF_ID_TOKEN = "id_token"
+CONF_TOKEN_EXPIRES_AT = "token_expires_at"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 DEFAULT_API_BASE_URL = "https://aws-prd.api.rccl.com"
+DEFAULT_WEB_BASE_URL = "https://www.royalcaribbean.com"
+DEFAULT_APP_KEY = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
+DEFAULT_BRAND = "royal"
+DEFAULT_LANGUAGE = "en"
+DEFAULT_OAUTH_CLIENT = "login-component"
 DEFAULT_SCAN_INTERVAL = 60
 MIN_SCAN_INTERVAL = 15
 DEFAULT_UPDATE_INTERVAL = timedelta(minutes=DEFAULT_SCAN_INTERVAL)

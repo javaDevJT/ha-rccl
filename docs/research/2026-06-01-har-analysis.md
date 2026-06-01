@@ -16,15 +16,26 @@ were ignored.
 
 ## Auth Observations
 
-- `POST /auth/json/authenticate` returns HTTP 200 in the HAR, but the saved
-  response body is empty.
-- `POST /v1/oauth2-authorize/en/royal/web/v1/authorize` sends a JSON body with
-  `client` and `tokenId`; its saved response body is also empty.
+- The RCCL account bundle calls `POST /auth/json/authenticate` with
+  `X-OpenAM-Username`, `X-OpenAM-Password`, `accept-api-version:
+  resource=2.0, protocol=1.0`, and the public web `appkey`.
+- The successful OpenAM response returns a `tokenId`.
+- The bundle then calls
+  `POST /v1/oauth2-authorize/en/royal/web/v1/authorize` with the public web
+  app key and body `{ "client": "login-component", "tokenId": "..." }`.
+- The authorize response is expected to include `access_token`,
+  `refresh_token`, `id_token`, and `expires_in`; account-web wrapper payloads
+  may spell these as `accessToken`, `refreshToken`, `openIdToken`, and
+  `tokenExpiration`.
+- The account id used by guest-account endpoints is available as
+  `payload.accountId` in wrapper responses or as a `vdsid`/`vdsId`-style claim
+  in the OpenID token.
 - Subsequent API requests use headers named `access-token`, `account-id`, and
   `appkey`. Some also include `vds-id`, `req-app-id`, and `req-app-vers`.
 
-Because the auth responses were not preserved, the first integration version
-uses token/header configuration instead of attempting automated password login.
+The integration should therefore collect username/password, log in through the
+same OpenAM/OAuth sequence, and derive the access token and account id
+automatically.
 
 ## Account API Endpoints
 
