@@ -30,6 +30,8 @@ that reads credentials from environment variables.
   booking/passenger attributes in Home Assistant.
 - [research/2026-06-01-club-royale-session-split.md](research/2026-06-01-club-royale-session-split.md)
   records why Club Royale uses a standalone login session.
+- [research/2026-06-01-loyalty-history-and-card-js.md](research/2026-06-01-loyalty-history-and-card-js.md)
+  records the loyalty-history query parameter and frontend registration fixes.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -52,3 +54,5 @@ that reads credentials from environment variables.
   describes the Club Royale offer card and totals fix.
 - [publishing/alpha-8-release-notes.md](publishing/alpha-8-release-notes.md)
   describes the Club Royale standalone-session fix.
+- [publishing/alpha-9-release-notes.md](publishing/alpha-9-release-notes.md)
+  describes the past-cruise history and custom-card loading fixes.

@@ -18,16 +18,22 @@ from .const import CONF_APP_KEY, CONF_PASSWORD, CONF_USERNAME, DEFAULT_APP_KEY, 
 
 STATIC_URL_PATH = "/rccl_static"
 CARD_FILENAME = "club-royale-calendar-card.js"
+_FRONTEND_REGISTERED = "_frontend_registered"
 
 
 async def async_setup_frontend(hass: HomeAssistant) -> None:
     """Register frontend assets and websocket commands."""
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get(_FRONTEND_REGISTERED):
+        return
 
     static_path = Path(__file__).parent / "www"
     await hass.http.async_register_static_paths(
         [StaticPathConfig(STATIC_URL_PATH, str(static_path), True)]
     )
     websocket_api.async_register_command(hass, websocket_club_royale_sailings)
+    domain_data[_FRONTEND_REGISTERED] = True
 
 
 @websocket_api.websocket_command(
@@ -79,6 +85,10 @@ async def websocket_club_royale_sailings(
         except RCCLApiError as err:
             entry_sailings = []
             error = f"Club Royale unavailable: {err}"
+            errors.append({"entry_id": entry.entry_id, "message": error})
+        except Exception as err:  # noqa: BLE001 - surface card data failures.
+            entry_sailings = []
+            error = f"Club Royale failed: {err}"
             errors.append({"entry_id": entry.entry_id, "message": error})
         finally:
             await session.close()

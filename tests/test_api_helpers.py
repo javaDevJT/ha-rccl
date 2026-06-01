@@ -78,7 +78,7 @@ SAMPLE_DATA = {
                     "itineraryCode": "HIST",
                     "itineraryNightsQuantity": "4",
                     "originPortDescription": "Miami",
-                    "sailingDate": "2025-05-01",
+                    "sailingDate": "20250501",
                     "shipName": "Example of the Seas",
                     "status": "COMPLETED",
                 }
@@ -238,6 +238,11 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual([event["start"] for event in events], [date(2025, 5, 1), date(2026, 1, 10), date(2026, 7, 4)])
         self.assertEqual(events[-1]["end"], date(2026, 7, 12))
         self.assertIn("7 night cruise", events[-1]["description"])
+
+    def test_parse_rccl_date_supports_loyalty_history_compact_dates(self) -> None:
+        """Loyalty history uses YYYYMMDD dates."""
+
+        self.assertEqual(api.parse_rccl_date("20140622"), date(2014, 6, 22))
 
     def test_loyalty_summary_derives_totals_from_history_when_summary_is_empty(self) -> None:
         """History sailings should backfill zero/empty RCCL summary totals."""
@@ -490,6 +495,37 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
             any("/api/casino/" in str(call["url"]) for call in session.calls)
         )
 
+    async def test_loyalty_history_request_includes_loyalty_number(self) -> None:
+        """Past cruise history should pass the account loyalty number."""
+
+        session = FakeSession([FakeResponse(200, {"payload": {"sailings": []}})])
+        client = api.RCCLClient(
+            session,
+            api.RCCLCredentials(
+                access_token="access",
+                account_id="58acd9a0-a469-4177-8e59-7b535575d979",
+                vds_id="58acd9a0-a469-4177-8e59-7b535575d979",
+            ),
+        )
+
+        await client.async_get_loyalty_history(
+            {
+                "payload": {
+                    "loyaltyInformation": {
+                        "crownAndAnchorId": "364350586",
+                    }
+                }
+            }
+        )
+
+        self.assertTrue(
+            session.calls[0]["url"].endswith(
+                "/en/royal/web/v1/guestAccounts/loyalty/history/"
+                "58acd9a0-a469-4177-8e59-7b535575d979"
+            )
+        )
+        self.assertEqual(session.calls[0]["params"], {"loyaltyNumber": "364350586"})
+
     async def test_club_royale_fetch_logs_in_with_separate_session(self) -> None:
         """The card data helper should log in and fetch offers in its own session."""
 
@@ -554,6 +590,26 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
             "https://api.rccl.com/en/royal/web/v3/guestAccounts",
         )
         self.assertIn("/api/casino/v2/offers/merged", session.calls[3]["url"])
+
+
+class SourceContractTest(unittest.TestCase):
+    """Check Home Assistant wiring that is hard to import without HA installed."""
+
+    def test_frontend_registration_is_idempotent_and_entry_backed(self) -> None:
+        """The card JS should be registered when a config entry is set up."""
+
+        init_source = (ROOT / "custom_components" / "rccl" / "__init__.py").read_text()
+        frontend_source = (
+            ROOT / "custom_components" / "rccl" / "frontend.py"
+        ).read_text()
+
+        self.assertGreaterEqual(init_source.count("await async_setup_frontend(hass)"), 2)
+        self.assertIn("_FRONTEND_REGISTERED", frontend_source)
+        self.assertIn("async_register_static_paths", frontend_source)
+        self.assertIn("_entryIdFromEntities", card_source := (
+            ROOT / "custom_components" / "rccl" / "www" / "club-royale-calendar-card.js"
+        ).read_text())
+        self.assertIn("config_entry_id", card_source)
 
 
 if __name__ == "__main__":

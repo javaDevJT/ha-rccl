@@ -254,12 +254,16 @@ class RCCLClient:
             "/en/royal/web/v1/guestAccounts/loyalty/history/summary",
         )
 
-    async def async_get_loyalty_history(self) -> JsonObject:
+    async def async_get_loyalty_history(self, account: JsonObject | None = None) -> JsonObject:
         """Fetch historical sailings."""
 
+        params = None
+        if account and (loyalty_number := loyalty_number_from_account(account)):
+            params = {"loyaltyNumber": loyalty_number}
         return await self._request(
             "GET",
             f"/en/royal/web/v1/guestAccounts/loyalty/history/{self.account_id}",
+            params=params,
         )
 
     async def async_get_club_royale_data(self, account: JsonObject) -> JsonObject:
@@ -323,7 +327,7 @@ class RCCLClient:
             self._optional(self.async_get_upgrades, "upgrades"),
             self._optional(self.async_get_loyalty_info, "loyalty"),
             self._optional(self.async_get_loyalty_history_summary, "loyalty_summary"),
-            self._optional(self.async_get_loyalty_history, "loyalty_history"),
+            self._optional(lambda: self.async_get_loyalty_history(account), "loyalty_history"),
         )
 
         return {
@@ -697,6 +701,12 @@ def club_royale_loyalty_id(data: JsonObject) -> str | None:
         "cruiseLoyaltyId",
     )
     return str(value) if value else None
+
+
+def loyalty_number_from_account(account: JsonObject) -> str | None:
+    """Return the loyalty number required by loyalty-history APIs."""
+
+    return club_royale_loyalty_id({"account": account})
 
 
 def loyalty_summary(data: JsonObject) -> JsonObject:

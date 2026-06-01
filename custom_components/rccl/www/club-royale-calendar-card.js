@@ -53,8 +53,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
     try {
       const message = { type: "rccl/club_royale_sailings" };
-      if (this._config.entry_id) {
-        message.entry_id = this._config.entry_id;
+      const entryId = this._config.entry_id || this._entryIdFromEntities();
+      if (entryId) {
+        message.entry_id = entryId;
       }
       const result = this._hass.callWS
         ? await this._hass.callWS(message)
@@ -490,6 +491,36 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       bar.addEventListener("focus", select);
       bar.addEventListener("click", select);
     });
+  }
+
+  _entryIdFromEntities() {
+    if (!this._hass || !this._hass.entities) {
+      return undefined;
+    }
+    const entityIds = Object.keys(this._hass.states || {}).filter((entityId) =>
+      entityId.startsWith("sensor.rccl_") ||
+      entityId.startsWith("sensor.royal_caribbean") ||
+      entityId.startsWith("calendar.rccl_") ||
+      entityId.startsWith("calendar.royal_caribbean"),
+    );
+    for (const entityId of entityIds) {
+      const entryId = this._hass.entities[entityId]?.config_entry_id;
+      if (entryId) {
+        return entryId;
+      }
+    }
+    for (const [entityId, entity] of Object.entries(this._hass.entities)) {
+      if (
+        entityId.startsWith("sensor.") ||
+        entityId.startsWith("calendar.")
+      ) {
+        const name = `${entity.name || ""} ${entity.translation_key || ""}`.toLowerCase();
+        if (name.includes("royal caribbean") || name.includes("rccl")) {
+          return entity.config_entry_id;
+        }
+      }
+    }
+    return undefined;
   }
 }
 

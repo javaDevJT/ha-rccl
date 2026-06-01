@@ -46,6 +46,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, object]) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Royal Caribbean from a config entry."""
 
+    await async_setup_frontend(hass)
+
     session = async_get_clientsession(hass)
     try:
         credentials = await _credentials_from_entry(hass, session, entry)
