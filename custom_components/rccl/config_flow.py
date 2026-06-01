@@ -4,18 +4,27 @@ from __future__ import annotations
 
 from typing import Any
 
+from aiohttp import CookieJar
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
 from homeassistant.helpers import selector
 
-from .api import RCCLApiError, RCCLAuthenticationError, RCCLClient, RCCLCredentials
+from .api import (
+    RCCLApiError,
+    RCCLAuthenticationError,
+    RCCLClient,
+    RCCLCredentials,
+    club_royale_loyalty_id,
+)
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
     CONF_APP_KEY,
+    CONF_CLUB_ROYALE_LOYALTY_ID,
+    CONF_ENTRY_TYPE,
     CONF_ID_TOKEN,
     CONF_PASSWORD,
     CONF_REFRESH_TOKEN,
@@ -24,6 +33,8 @@ from .const import (
     CONF_USERNAME,
     CONF_VDS_ID,
     DEFAULT_SCAN_INTERVAL,
+    ENTRY_TYPE_ACCOUNT,
+    ENTRY_TYPE_CLUB_ROYALE,
     DOMAIN,
     MIN_SCAN_INTERVAL,
 )
@@ -67,6 +78,14 @@ def _reauth_schema(username: str) -> vol.Schema:
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
+    """Validate normal Royal Caribbean account input."""
+
+    return await validate_account_input(hass, data)
+
+
+async def validate_account_input(
+    hass: HomeAssistant, data: dict[str, Any]
+) -> dict[str, Any]:
     """Validate user input by logging in and calling the RCCL account API."""
 
     session = async_get_clientsession(hass)
@@ -91,10 +110,44 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     }
 
 
+async def validate_club_royale_input(
+    hass: HomeAssistant, data: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate Club Royale input with a standalone browser session."""
+
+    session = async_create_clientsession(hass, cookie_jar=CookieJar())
+    try:
+        credentials = await RCCLClient.async_login(
+            session,
+            data[CONF_USERNAME],
+            data[CONF_PASSWORD],
+            auth_referer="https://www.royalcaribbean.com/club-royale/signin",
+            authorize_referer="https://www.royalcaribbean.com/",
+        )
+        client = RCCLClient(session, credentials)
+        account = await client.async_get_club_royale_account()
+        loyalty_id = club_royale_loyalty_id({"account": account})
+        if not loyalty_id:
+            raise RCCLApiError("Club Royale account did not include a loyalty id")
+    except RCCLAuthenticationError as err:
+        raise InvalidAuth from err
+    except RCCLApiError as err:
+        raise CannotConnect from err
+    finally:
+        await session.close()
+
+    return {
+        "title": "Club Royale Offers",
+        "unique_id": f"{ENTRY_TYPE_CLUB_ROYALE}:{loyalty_id}",
+        "data": _club_royale_entry_data(data, credentials, loyalty_id),
+    }
+
+
 def _entry_data(data: dict[str, Any], credentials: RCCLCredentials) -> dict[str, Any]:
     """Return config-entry data from login credentials."""
 
     entry_data = {
+        CONF_ENTRY_TYPE: ENTRY_TYPE_ACCOUNT,
         CONF_USERNAME: data[CONF_USERNAME].strip(),
         CONF_PASSWORD: data[CONF_PASSWORD],
         CONF_ACCESS_TOKEN: credentials.access_token,
@@ -112,6 +165,22 @@ def _entry_data(data: dict[str, Any], credentials: RCCLCredentials) -> dict[str,
     return entry_data
 
 
+def _club_royale_entry_data(
+    data: dict[str, Any], credentials: RCCLCredentials, loyalty_id: str
+) -> dict[str, Any]:
+    """Return config-entry data for a Club Royale offers entry."""
+
+    return {
+        CONF_ENTRY_TYPE: ENTRY_TYPE_CLUB_ROYALE,
+        CONF_USERNAME: data[CONF_USERNAME].strip(),
+        CONF_PASSWORD: data[CONF_PASSWORD],
+        CONF_ACCOUNT_ID: credentials.account_id,
+        CONF_APP_KEY: credentials.app_key,
+        CONF_CLUB_ROYALE_LOYALTY_ID: loyalty_id,
+        CONF_SCAN_INTERVAL: data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+    }
+
+
 class RCCLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Royal Caribbean config flow."""
 
@@ -121,13 +190,24 @@ class RCCLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Handle the initial step."""
+        """Let the user choose which RCCL data source to configure."""
+
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["account", ENTRY_TYPE_CLUB_ROYALE],
+        )
+
+    async def async_step_account(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Handle the normal Royal Caribbean account step."""
 
         errors: dict[str, str] = {}
 
         if user_input is not None:
             try:
-                info = await validate_input(self.hass, user_input)
+                info = await validate_account_input(self.hass, user_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -140,7 +220,35 @@ class RCCLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=info["title"], data=info["data"])
 
         return self.async_show_form(
-            step_id="user",
+            step_id="account",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_club_royale(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Handle the Club Royale offers step."""
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                info = await validate_club_royale_input(self.hass, user_input)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                errors["base"] = "unknown"
+            else:
+                await self.async_set_unique_id(info["unique_id"])
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=info["title"], data=info["data"])
+
+        return self.async_show_form(
+            step_id=ENTRY_TYPE_CLUB_ROYALE,
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
         )
@@ -165,7 +273,10 @@ class RCCLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             merged_input = {**entry.data, **user_input}
             try:
-                info = await validate_input(self.hass, merged_input)
+                if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLUB_ROYALE:
+                    info = await validate_club_royale_input(self.hass, merged_input)
+                else:
+                    info = await validate_account_input(self.hass, merged_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:

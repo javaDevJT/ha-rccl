@@ -39,8 +39,12 @@ that reads credentials from environment variables.
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
   captures the Club Royale custom card display and backend data contract.
+- [design/2026-06-01-club-royale-entity-config.md](design/2026-06-01-club-royale-entity-config.md)
+  captures the separate Club Royale config-entry and entity-backed card design.
 - [superpowers/plans/2026-06-01-club-royale-card.md](superpowers/plans/2026-06-01-club-royale-card.md)
   is the implementation plan for the Club Royale offer parser and Lovelace card.
+- [superpowers/plans/2026-06-01-club-royale-entity-config.md](superpowers/plans/2026-06-01-club-royale-entity-config.md)
+  is the implementation plan for separate Club Royale config and entities.
 - [publishing/2026-06-01-alpha-1.md](publishing/2026-06-01-alpha-1.md)
   tracks the alpha 1 GitHub publishing flow.
 - [publishing/alpha-2-release-notes.md](publishing/alpha-2-release-notes.md)
@@ -61,3 +65,5 @@ that reads credentials from environment variables.
   describes the past-cruise history and custom-card loading fixes.
 - [publishing/alpha-10-release-notes.md](publishing/alpha-10-release-notes.md)
   describes the Club Royale websocket data-loading fix.
+- [publishing/alpha-11-release-notes.md](publishing/alpha-11-release-notes.md)
+  describes the separate Club Royale config path and entity-backed card data.

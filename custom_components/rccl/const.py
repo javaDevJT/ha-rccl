@@ -16,6 +16,11 @@ CONF_REFRESH_TOKEN = "refresh_token"
 CONF_ID_TOKEN = "id_token"
 CONF_TOKEN_EXPIRES_AT = "token_expires_at"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_ENTRY_TYPE = "entry_type"
+CONF_CLUB_ROYALE_LOYALTY_ID = "club_royale_loyalty_id"
+
+ENTRY_TYPE_ACCOUNT = "account"
+ENTRY_TYPE_CLUB_ROYALE = "club_royale"
 
 DEFAULT_API_BASE_URL = "https://aws-prd.api.rccl.com"
 DEFAULT_CLUB_ROYALE_API_BASE_URL = "https://api.rccl.com"
@@ -38,3 +43,4 @@ REQ_APP_ID = "RCL-WEB"
 REQ_APP_VERSION = "1.0.0"
 
 PLATFORMS = ["sensor", "calendar"]
+CLUB_ROYALE_PLATFORMS = ["sensor"]

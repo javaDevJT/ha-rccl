@@ -4,7 +4,24 @@
     "step": {
       "user": {
         "title": "Connect Royal Caribbean",
+        "description": "Choose the Royal Caribbean data source to add.",
+        "menu_options": {
+          "account": "Royal Caribbean account",
+          "club_royale": "Club Royale offers"
+        }
+      },
+      "account": {
+        "title": "Connect Royal Caribbean Account",
         "description": "Sign in with your Royal Caribbean account.",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "scan_interval": "Scan interval in minutes"
+        }
+      },
+      "club_royale": {
+        "title": "Connect Club Royale Offers",
+        "description": "Sign in with your Royal Caribbean account to retrieve Club Royale offers.",
         "data": {
           "username": "Email",
           "password": "Password",
@@ -53,6 +70,9 @@
       },
       "total_cruise_nights": {
         "name": "Total cruise nights"
+      },
+      "club_royale_available_sailings": {
+        "name": "Club Royale available sailings"
       }
     },
     "calendar": {

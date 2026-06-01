@@ -20,6 +20,7 @@ from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
     CONF_APP_KEY,
+    CONF_ENTRY_TYPE,
     CONF_ID_TOKEN,
     CONF_PASSWORD,
     CONF_REFRESH_TOKEN,
@@ -27,12 +28,14 @@ from .const import (
     CONF_TOKEN_EXPIRES_AT,
     CONF_USERNAME,
     CONF_VDS_ID,
+    CLUB_ROYALE_PLATFORMS,
     DEFAULT_APP_KEY,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    ENTRY_TYPE_CLUB_ROYALE,
     PLATFORMS,
 )
-from .coordinator import RCCLDataUpdateCoordinator
+from .coordinator import RCCLClubRoyaleDataUpdateCoordinator, RCCLDataUpdateCoordinator
 from .frontend import async_setup_frontend
 
 
@@ -47,6 +50,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Royal Caribbean from a config entry."""
 
     await async_setup_frontend(hass)
+
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLUB_ROYALE:
+        return await _async_setup_club_royale_entry(hass, entry)
 
     session = async_get_clientsession(hass)
     try:
@@ -69,18 +75,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, _platforms_for_entry(entry))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, _platforms_for_entry(entry)
+    )
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         entry.runtime_data = None
     return unload_ok
+
+
+async def _async_setup_club_royale_entry(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
+    """Set up a standalone Club Royale offers config entry."""
+
+    if not entry.data.get(CONF_USERNAME) or not entry.data.get(CONF_PASSWORD):
+        raise ConfigEntryAuthFailed("Club Royale username/password is required")
+
+    interval = timedelta(
+        minutes=entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    )
+    coordinator = RCCLClubRoyaleDataUpdateCoordinator(
+        hass,
+        entry.data[CONF_USERNAME],
+        entry.data[CONF_PASSWORD],
+        app_key=entry.data.get(CONF_APP_KEY, DEFAULT_APP_KEY),
+        update_interval=interval,
+    )
+    await coordinator.async_config_entry_first_refresh()
+
+    entry.runtime_data = coordinator
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, _platforms_for_entry(entry))
+    return True
+
+
+def _platforms_for_entry(entry: ConfigEntry) -> list[str]:
+    """Return Home Assistant platforms for this RCCL entry type."""
+
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLUB_ROYALE:
+        return CLUB_ROYALE_PLATFORMS
+    return PLATFORMS
 
 
 async def _credentials_from_entry(

@@ -28,6 +28,15 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const entitySailings = this._sailingsFromEntities();
+    if (entitySailings.length || this._hasClubRoyaleEntitySource()) {
+      this._applySailings(entitySailings);
+      this._loaded = true;
+      this._loading = false;
+      this._error = undefined;
+      this._render();
+      return;
+    }
     if (!this._loaded && !this._loading) {
       this._loadData();
     }
@@ -65,6 +74,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     if (!this._hass || this._loading || (this._loaded && !force)) {
       return;
     }
+    const entitySailings = this._sailingsFromEntities();
+    if (entitySailings.length || this._hasClubRoyaleEntitySource()) {
+      this._applySailings(entitySailings);
+      this._loaded = true;
+      this._error = undefined;
+      this._render();
+      return;
+    }
     this._loading = true;
     this._error = undefined;
     this._render();
@@ -76,14 +93,11 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
         message.entry_id = entryId;
       }
       const result = await this._sendWebsocket(message);
-      this._sailings = Array.isArray(result.sailings) ? result.sailings : [];
+      this._applySailings(Array.isArray(result.sailings) ? result.sailings : []);
       if (!this._sailings.length && Array.isArray(result.errors) && result.errors.length) {
         this._error = result.errors.map((item) => item.message).join("; ");
       }
       this._loaded = true;
-      if (!this._selectedId || !this._sailings.some((item) => item.id === this._selectedId)) {
-        this._selectedId = this._sailings[0]?.id;
-      }
     } catch (err) {
       this._error = err?.message || String(err);
     } finally {
@@ -506,6 +520,55 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       bar.addEventListener("mouseenter", select);
       bar.addEventListener("focus", select);
       bar.addEventListener("click", select);
+    });
+  }
+
+  _applySailings(sailings) {
+    this._sailings = sailings;
+    if (!this._selectedId || !this._sailings.some((item) => item.id === this._selectedId)) {
+      this._selectedId = this._sailings[0]?.id;
+    }
+  }
+
+  _sailingsFromEntities() {
+    if (!this._hass?.states) {
+      return [];
+    }
+    return Object.entries(this._hass.states)
+      .map(([entityId, state]) => this._sailingFromEntity(entityId, state))
+      .filter(Boolean)
+      .sort((left, right) =>
+        `${left.sail_date || ""}:${left.ship_name || ""}`.localeCompare(
+          `${right.sail_date || ""}:${right.ship_name || ""}`
+        )
+      );
+  }
+
+  _sailingFromEntity(entityId, state) {
+    const attrs = state?.attributes || {};
+    if (attrs.integration !== "rccl" || attrs.entity_kind !== "club_royale_sailing") {
+      return undefined;
+    }
+    const sailDate = attrs.sail_date || state.state;
+    if (!sailDate || sailDate === "unknown" || sailDate === "unavailable") {
+      return undefined;
+    }
+    const id = String(attrs.sailing_id || attrs.id || entityId);
+    const itineraryName = attrs.itinerary_name || attrs.friendly_name || "Club Royale sailing";
+    const shipName = attrs.ship_name || "";
+    return {
+      ...attrs,
+      id,
+      entity_id: entityId,
+      sail_date: sailDate,
+      calendar_title: attrs.calendar_title || (shipName ? `${itineraryName} - ${shipName}` : itineraryName),
+    };
+  }
+
+  _hasClubRoyaleEntitySource() {
+    return Object.values(this._hass?.states || {}).some((state) => {
+      const attrs = state?.attributes || {};
+      return attrs.integration === "rccl" && String(attrs.entity_kind || "").startsWith("club_royale");
     });
   }
 

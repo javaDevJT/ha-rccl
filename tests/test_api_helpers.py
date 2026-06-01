@@ -614,6 +614,41 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("WEBSOCKET_TIMEOUT_MS", card_source)
         self.assertIn("_sendWebsocket", card_source)
 
+    def test_club_royale_has_separate_config_entry_and_entities(self) -> None:
+        """Club Royale should be configured and exposed independently."""
+
+        const_source = (ROOT / "custom_components" / "rccl" / "const.py").read_text()
+        config_flow_source = (
+            ROOT / "custom_components" / "rccl" / "config_flow.py"
+        ).read_text()
+        init_source = (ROOT / "custom_components" / "rccl" / "__init__.py").read_text()
+        coordinator_source = (
+            ROOT / "custom_components" / "rccl" / "coordinator.py"
+        ).read_text()
+        sensor_source = (ROOT / "custom_components" / "rccl" / "sensor.py").read_text()
+        card_source = (
+            ROOT / "custom_components" / "rccl" / "www" / "club-royale-calendar-card.js"
+        ).read_text()
+
+        self.assertIn("CONF_ENTRY_TYPE", const_source)
+        self.assertIn("ENTRY_TYPE_CLUB_ROYALE", const_source)
+        self.assertIn("CONF_CLUB_ROYALE_LOYALTY_ID", const_source)
+        self.assertIn("CLUB_ROYALE_PLATFORMS", const_source)
+        self.assertIn("async_show_menu", config_flow_source)
+        self.assertIn("async_step_account", config_flow_source)
+        self.assertIn("async_step_club_royale", config_flow_source)
+        self.assertIn("validate_club_royale_input", config_flow_source)
+        self.assertIn("CookieJar", config_flow_source)
+        self.assertIn("RCCLClubRoyaleDataUpdateCoordinator", coordinator_source)
+        self.assertIn("async_fetch_club_royale_sailings", coordinator_source)
+        self.assertIn("ENTRY_TYPE_CLUB_ROYALE", init_source)
+        self.assertIn("CLUB_ROYALE_PLATFORMS", init_source)
+        self.assertIn("ClubRoyaleSummarySensor", sensor_source)
+        self.assertIn("ClubRoyaleSailingSensor", sensor_source)
+        self.assertIn("club_royale_sailing", sensor_source)
+        self.assertIn("_sailingsFromEntities", card_source)
+        self.assertIn("club_royale_sailing", card_source)
+
 
 if __name__ == "__main__":
     unittest.main()
