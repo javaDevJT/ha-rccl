@@ -655,6 +655,10 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("club_royale_sailing", sensor_source)
         self.assertIn("_sailingsFromEntities", card_source)
         self.assertIn("club_royale_sailing", card_source)
+        self.assertIn("_weekLaneCounts", card_source)
+        self.assertIn("_weekRowHeight", card_source)
+        self.assertIn("calendar-shell", card_source)
+        self.assertIn("grid-template-rows:${weekRows}", card_source)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""

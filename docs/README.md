@@ -46,6 +46,8 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   records the live 403 diagnosis for the Club Royale offers API.
 - [research/2026-06-01-club-royale-aiohttp-403.md](research/2026-06-01-club-royale-aiohttp-403.md)
   records the live aiohttp-vs-urllib Club Royale 403 diagnosis.
+- [research/2026-06-01-club-royale-calendar-overflow.md](research/2026-06-01-club-royale-calendar-overflow.md)
+  records the custom-card dense-month overflow diagnosis and fix.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -87,3 +89,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the Club Royale offers page priming and authorization-header fixes.
 - [publishing/alpha-15-release-notes.md](publishing/alpha-15-release-notes.md)
   describes the urllib-backed Club Royale session fix for Home Assistant.
+- [publishing/alpha-16-release-notes.md](publishing/alpha-16-release-notes.md)
+  describes the Club Royale calendar dense-month layout fix.

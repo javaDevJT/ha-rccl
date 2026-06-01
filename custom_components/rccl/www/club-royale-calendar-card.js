@@ -1,4 +1,8 @@
 const WEBSOCKET_TIMEOUT_MS = 45000;
+const BAR_TOP_OFFSET = 28;
+const BAR_LANE_HEIGHT = 27;
+const MIN_WEEK_HEIGHT = 108;
+const WEEK_BOTTOM_PADDING = 10;
 
 class RCCLClubRoyaleCalendarCard extends HTMLElement {
   constructor() {
@@ -114,6 +118,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const grid = this._calendarModel();
     const visibleSailings = this._visibleSailings(grid.start, grid.end);
     const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
+    const weekLaneCounts = this._weekLaneCounts(segments, grid.weekCount);
     const selected =
       visibleSailings.find((item) => item.id === this._selectedId) ||
       visibleSailings[0] ||
@@ -196,8 +201,16 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           position: relative;
           display: grid;
           grid-template-columns: repeat(7, minmax(0, 1fr));
-          grid-auto-rows: 108px;
+          grid-auto-rows: auto;
           gap: 4px;
+        }
+
+        .calendar-shell {
+          max-height: min(72vh, 720px);
+          overflow-x: hidden;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding-right: 2px;
         }
 
         .day {
@@ -304,8 +317,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
             flex-direction: column;
           }
 
-          .calendar {
-            grid-auto-rows: 96px;
+          .calendar-shell {
+            max-height: 70vh;
           }
 
           .sailing-bar {
@@ -338,14 +351,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
               <button type="button" data-action="refresh" aria-label="Refresh">&#8635;</button>
             </div>
           </div>
-          ${this._body(grid, visibleSailings, segments, selected)}
+          ${this._body(grid, visibleSailings, segments, selected, weekLaneCounts)}
         </div>
       </ha-card>
     `;
     this._attachHandlers();
   }
 
-  _body(grid, visibleSailings, segments, selected) {
+  _body(grid, visibleSailings, segments, selected, weekLaneCounts) {
     if (this._loading && !this._loaded) {
       return `<div class="state">Loading Club Royale sailings...</div>`;
     }
@@ -357,11 +370,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     }
 
     const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const weekRows = weekLaneCounts.map((count) => `${this._weekRowHeight(count)}px`).join(" ");
     return `
       <div class="weekdays">${weekdays.map((day) => `<div>${day}</div>`).join("")}</div>
-      <div class="calendar" style="grid-template-rows: repeat(${grid.weekCount}, minmax(96px, 108px));">
-        ${grid.days.map((day) => this._dayCell(day)).join("")}
-        ${segments.map((segment) => this._segmentBar(segment)).join("")}
+      <div class="calendar-shell">
+        <div class="calendar" style="grid-template-rows:${weekRows};">
+          ${grid.days.map((day) => this._dayCell(day)).join("")}
+          ${segments.map((segment) => this._segmentBar(segment)).join("")}
+        </div>
       </div>
       ${visibleSailings.length ? this._details(selected) : `<div class="state">No Club Royale sailings found for ${escapeHtml(monthLabel(this._month))}.</div>`}
     `;
@@ -399,7 +415,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
         type="button"
         class="${classes.join(" ")}"
         data-sailing-id="${escapeHtml(sailing.id)}"
-        style="grid-column:${segment.column} / span ${segment.span};grid-row:${segment.week + 1};margin-top:${28 + segment.lane * 27}px;background:${segment.color};"
+        style="grid-column:${segment.column} / span ${segment.span};grid-row:${segment.week + 1};margin-top:${BAR_TOP_OFFSET + segment.lane * BAR_LANE_HEIGHT}px;background:${segment.color};"
         title="${escapeHtml(sailing.calendar_title)}"
       >${escapeHtml(sailing.calendar_title)}</button>
     `;
@@ -490,6 +506,21 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       }
     }
     return assignLanes(segments);
+  }
+
+  _weekLaneCounts(segments, weekCount) {
+    const counts = Array.from({ length: weekCount }, () => 0);
+    for (const segment of segments) {
+      counts[segment.week] = Math.max(counts[segment.week], segment.lane + 1);
+    }
+    return counts;
+  }
+
+  _weekRowHeight(laneCount) {
+    return Math.max(
+      MIN_WEEK_HEIGHT,
+      BAR_TOP_OFFSET + Math.max(laneCount, 1) * BAR_LANE_HEIGHT + WEEK_BOTTOM_PADDING,
+    );
   }
 
   _attachHandlers() {
