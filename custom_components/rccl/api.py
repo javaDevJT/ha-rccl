@@ -28,6 +28,10 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
+)
 
 JsonObject = dict[str, Any]
 
@@ -99,8 +103,12 @@ class RCCLClient:
             headers={
                 "accept": "application/json",
                 "accept-api-version": "resource=2.0, protocol=1.0",
+                "accept-language": "en-US,en;q=0.9",
                 "content-type": "application/x-www-form-urlencoded",
                 HEADER_APP_KEY: app_key,
+                "origin": web_base_url,
+                "referer": f"{web_base_url}/account/signin",
+                "user-agent": _USER_AGENT,
                 "X-OpenAM-Username": username,
                 "X-OpenAM-Password": password,
             },
@@ -118,8 +126,12 @@ class RCCLClient:
             f"{api_base_url}/v1/oauth2-authorize/{language}/{brand}/web/v1/authorize",
             headers={
                 "accept": "application/json",
+                "accept-language": "en-US,en;q=0.9",
                 "content-type": "application/json",
                 "AppKey": app_key,
+                "origin": web_base_url,
+                "referer": f"{web_base_url}/account/signin",
+                "user-agent": _USER_AGENT,
             },
             json_body={"client": DEFAULT_OAUTH_CLIENT, "tokenId": token_id},
             auth_request=True,

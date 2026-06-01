@@ -22,6 +22,20 @@ meaningful body.
   `cannot_connect`.
 - Send `/auth/json/authenticate` with
   `application/x-www-form-urlencoded` and an empty body.
+- Include browser-like `origin`, `referer`, `accept-language`, and `user-agent`
+  headers on auth requests.
 - Add a timeout regression test.
 - Add `scripts/live_login_check.py` to test the Python auth path with
   environment-provided credentials without printing secrets.
+
+## Live Evidence
+
+The sanitized live smoke test completed the full Python auth path:
+
+- `authenticate` step started and returned.
+- `authorize` step started and returned.
+- login elapsed time was under 6 seconds.
+- `guest_account` step started and returned.
+- access token, account id, and profile payload were present.
+
+The test did not print token values, account IDs, or credentials.

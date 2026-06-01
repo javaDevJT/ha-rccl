@@ -16,6 +16,7 @@ import types
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 CUSTOM_COMPONENTS = types.ModuleType("custom_components")
@@ -85,7 +86,15 @@ class UrlLibResponse:
 class UrlLibSession:
     """Minimal aiohttp-style session wrapper."""
 
+    def __init__(self) -> None:
+        self.request_count = 0
+
     def request(self, method: str, url: str, **kwargs: Any) -> UrlLibResponse:
+        self.request_count += 1
+        parsed_step = "authenticate" if "authenticate" in url else "authorize"
+        if "guestAccounts" in url:
+            parsed_step = "guest_account"
+        print(f"step={self.request_count}:{parsed_step}:start")
         return UrlLibResponse(
             method,
             url,
@@ -104,19 +113,24 @@ async def main() -> int:
         print("Missing RCCL_USERNAME or RCCL_PASSWORD")
         return 2
 
+    start = time.monotonic()
+    session = UrlLibSession()
     try:
         credentials = await api.RCCLClient.async_login(
-            UrlLibSession(),
+            session,
             username,
             password,
             request_timeout=30,
         )
-        client = api.RCCLClient(UrlLibSession(), credentials)
+        print(f"login_elapsed_seconds={time.monotonic() - start:.1f}")
+        client = api.RCCLClient(session, credentials)
         account = await client.async_get_account()
     except api.RCCLAuthenticationError as err:
+        print(f"elapsed_seconds={time.monotonic() - start:.1f}")
         print(f"login=auth_failed error={err}")
         return 1
     except api.RCCLApiError as err:
+        print(f"elapsed_seconds={time.monotonic() - start:.1f}")
         print(f"login=api_failed error={err}")
         return 1
 
