@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 from datetime import date
 import importlib
 import json
@@ -108,6 +109,24 @@ class FakeSession:
         return self._responses.pop(0)
 
 
+class HangingResponse:
+    """Response that never enters, for timeout tests."""
+
+    async def __aenter__(self) -> "HangingResponse":
+        await asyncio.sleep(60)
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+
+class HangingSession:
+    """Session that returns a hanging response."""
+
+    def request(self, method: str, url: str, **kwargs: object) -> HangingResponse:
+        return HangingResponse()
+
+
 def fake_jwt(payload: dict[str, object]) -> str:
     """Return an unsigned JWT for tests."""
 
@@ -189,6 +208,11 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
             "person@example.com",
         )
         self.assertEqual(session.calls[0]["headers"]["X-OpenAM-Password"], "secret")
+        self.assertEqual(
+            session.calls[0]["headers"]["content-type"],
+            "application/x-www-form-urlencoded",
+        )
+        self.assertEqual(session.calls[0]["data"], "")
         self.assertTrue(session.calls[1]["url"].endswith("/en/royal/web/v1/authorize"))
         self.assertEqual(
             session.calls[1]["json"],
@@ -215,6 +239,17 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(credentials.account_id, "account-456")
         self.assertEqual(credentials.vds_id, "account-456")
         self.assertEqual(credentials.id_token, fake_jwt({"ignored": True}))
+
+    async def test_async_login_times_out_instead_of_hanging(self) -> None:
+        """A stalled RCCL auth request should fail with a bounded error."""
+
+        with self.assertRaisesRegex(api.RCCLApiError, "Timed out"):
+            await api.RCCLClient.async_login(
+                HangingSession(),
+                "person@example.com",
+                "secret",
+                request_timeout=0.001,
+            )
 
 
 if __name__ == "__main__":

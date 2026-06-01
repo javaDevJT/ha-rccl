@@ -17,6 +17,7 @@ from .const import (
     DEFAULT_BRAND,
     DEFAULT_LANGUAGE,
     DEFAULT_OAUTH_CLIENT,
+    DEFAULT_REQUEST_TIMEOUT,
     DEFAULT_WEB_BASE_URL,
     HEADER_ACCESS_TOKEN,
     HEADER_ACCOUNT_ID,
@@ -87,6 +88,7 @@ class RCCLClient:
         web_base_url: str = DEFAULT_WEB_BASE_URL,
         brand: str = DEFAULT_BRAND,
         language: str = DEFAULT_LANGUAGE,
+        request_timeout: int | float = DEFAULT_REQUEST_TIMEOUT,
     ) -> RCCLCredentials:
         """Log in to RCCL and return API credentials."""
 
@@ -97,12 +99,14 @@ class RCCLClient:
             headers={
                 "accept": "application/json",
                 "accept-api-version": "resource=2.0, protocol=1.0",
-                "content-type": "application/json",
+                "content-type": "application/x-www-form-urlencoded",
                 HEADER_APP_KEY: app_key,
                 "X-OpenAM-Username": username,
                 "X-OpenAM-Password": password,
             },
+            data="",
             auth_request=True,
+            timeout=request_timeout,
         )
         token_id = auth_response.get("tokenId")
         if not token_id:
@@ -119,6 +123,7 @@ class RCCLClient:
             },
             json_body={"client": DEFAULT_OAUTH_CLIENT, "tokenId": token_id},
             auth_request=True,
+            timeout=request_timeout,
         )
         return credentials_from_oauth_response(
             oauth_response,
@@ -275,30 +280,35 @@ class RCCLClient:
         *,
         headers: dict[str, str],
         json_body: JsonObject | None = None,
+        data: str | bytes | None = None,
         params: dict[str, str] | None = None,
         auth_request: bool = False,
+        timeout: int | float = DEFAULT_REQUEST_TIMEOUT,
     ) -> JsonObject:
         """Issue a request and parse a JSON response."""
 
         request_kwargs: dict[str, Any] = {"headers": headers}
         if json_body is not None:
             request_kwargs["json"] = json_body
+        if data is not None:
+            request_kwargs["data"] = data
         if params is not None:
             request_kwargs["params"] = params
 
         try:
-            async with session.request(method, url, **request_kwargs) as response:
-                text = await response.text()
-                if response.status in (401, 403):
-                    raise RCCLAuthenticationError(
-                        f"RCCL rejected credentials with HTTP {response.status}"
-                    )
-                if response.status < 200 or response.status >= 300:
-                    raise RCCLApiError(f"RCCL API returned HTTP {response.status}")
-                try:
-                    data = json.loads(text) if text else {}
-                except json.JSONDecodeError as err:
-                    raise RCCLApiError("RCCL API returned invalid JSON") from err
+            async with asyncio.timeout(timeout):
+                async with session.request(method, url, **request_kwargs) as response:
+                    text = await response.text()
+                    if response.status in (401, 403):
+                        raise RCCLAuthenticationError(
+                            f"RCCL rejected credentials with HTTP {response.status}"
+                        )
+                    if response.status < 200 or response.status >= 300:
+                        raise RCCLApiError(f"RCCL API returned HTTP {response.status}")
+                    try:
+                        data = json.loads(text) if text else {}
+                    except json.JSONDecodeError as err:
+                        raise RCCLApiError("RCCL API returned invalid JSON") from err
         except RCCLApiError:
             raise
         except TimeoutError as err:
