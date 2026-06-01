@@ -6,17 +6,17 @@ from dataclasses import replace
 from datetime import timedelta
 import logging
 
-from aiohttp import CookieJar
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     RCCLApiError,
     RCCLAuthenticationError,
     RCCLClient,
     RCCLCredentials,
+    RCCLUrllibSession,
     credentials_from_stored_data,
 )
 from .const import (
@@ -113,7 +113,7 @@ async def _async_setup_club_royale_entry(
     interval = timedelta(
         minutes=entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     )
-    session = async_create_clientsession(hass, cookie_jar=CookieJar())
+    session = RCCLUrllibSession()
     credentials = _club_royale_credentials_from_entry(entry)
     client = RCCLClient(session, credentials)
     coordinator = RCCLClubRoyaleDataUpdateCoordinator(

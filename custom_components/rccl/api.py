@@ -10,6 +10,10 @@ import json
 import logging
 import time
 from typing import Any
+from http.cookiejar import CookieJar as UrllibCookieJar
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 from .const import (
     CONF_ACCESS_TOKEN,
@@ -55,6 +59,94 @@ class RCCLApiError(Exception):
 
 class RCCLAuthenticationError(RCCLApiError):
     """Raised when RCCL rejects configured credentials."""
+
+
+class RCCLUrllibSession:
+    """Async-compatible urllib session for Club Royale browser endpoints."""
+
+    def __init__(self, cookie_jar: UrllibCookieJar | None = None) -> None:
+        self.cookie_jar = cookie_jar or UrllibCookieJar()
+        self.opener = build_opener(HTTPCookieProcessor(self.cookie_jar))
+
+    def request(self, method: str, url: str, **kwargs: Any) -> "RCCLUrllibResponse":
+        """Return an aiohttp-like request context manager."""
+
+        return RCCLUrllibResponse(
+            self,
+            method,
+            url,
+            headers=kwargs.get("headers", {}),
+            json_body=kwargs.get("json"),
+            data=kwargs.get("data"),
+            params=kwargs.get("params"),
+        )
+
+
+class RCCLUrllibResponse:
+    """A small aiohttp-style response wrapper around urllib."""
+
+    def __init__(
+        self,
+        session: RCCLUrllibSession,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json_body: JsonObject | None = None,
+        data: str | bytes | None = None,
+        params: dict[str, str] | None = None,
+    ) -> None:
+        self._session = session
+        self._method = method
+        self._url = _url_with_params(url, params)
+        self._headers = headers
+        self._json_body = json_body
+        self._data = data
+        self.status = 0
+        self._text = ""
+
+    async def __aenter__(self) -> "RCCLUrllibResponse":
+        self.status, self._text = await asyncio.to_thread(self._send)
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+    async def text(self) -> str:
+        """Return the response text."""
+
+        return self._text
+
+    def _send(self) -> tuple[int, str]:
+        """Send the request in a worker thread."""
+
+        body: bytes | None = None
+        if self._json_body is not None:
+            body = json.dumps(self._json_body).encode("utf-8")
+        elif isinstance(self._data, str):
+            body = self._data.encode("utf-8")
+        elif isinstance(self._data, bytes):
+            body = self._data
+
+        request = Request(
+            self._url,
+            data=body,
+            headers=self._headers,
+            method=self._method,
+        )
+        try:
+            with self._session.opener.open(
+                request, timeout=DEFAULT_REQUEST_TIMEOUT
+            ) as response:
+                raw = response.read()
+                charset = response.headers.get_content_charset() or "utf-8"
+                return response.status, raw.decode(charset, errors="replace")
+        except HTTPError as err:
+            raw = err.read()
+            charset = err.headers.get_content_charset() or "utf-8"
+            return err.code, raw.decode(charset, errors="replace")
+        except URLError as err:
+            raise RCCLApiError(f"Network error connecting to RCCL: {err.reason}") from err
 
 
 @dataclass(frozen=True)
@@ -595,10 +687,13 @@ class RCCLClient:
                 headers=headers,
                 json_body=json_body,
             )
-        except RCCLAuthenticationError:
+        except RCCLAuthenticationError as err:
             if retry_auth and self._credentials.username and self._credentials.password:
-                await self.async_reauthenticate()
-                await self.async_prime_club_royale_session()
+                try:
+                    await self.async_reauthenticate()
+                    await self.async_prime_club_royale_session()
+                except RCCLAuthenticationError as reauth_err:
+                    raise err from reauth_err
                 return await self._web_request(
                     method,
                     path,
@@ -724,6 +819,19 @@ def _first(source: JsonObject, *keys: str) -> Any:
         if value not in (None, ""):
             return value
     return None
+
+
+def _url_with_params(url: str, params: dict[str, str] | None) -> str:
+    """Return a URL with encoded query parameters."""
+
+    if not params:
+        return url
+
+    parts = urlsplit(url)
+    query = urlencode(params)
+    if parts.query:
+        query = f"{parts.query}&{query}"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
 
 
 def _expires_at(expires_in: Any) -> int | None:

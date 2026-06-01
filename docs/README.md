@@ -14,7 +14,8 @@ implementation work discovers something useful.
 Repository scripts live in `scripts/` and are intentionally small operational
 helpers. `scripts/live_login_check.py` is a sanitized live RCCL login smoke test
 that reads credentials from environment variables. `scripts/live_club_royale_check.py`
-does the same for Club Royale offers.
+does the same for Club Royale offers. `scripts/live_club_royale_aiohttp_check.py`
+reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 
 ## Current Notes
 
@@ -43,6 +44,8 @@ does the same for Club Royale offers.
   reuse fixes.
 - [research/2026-06-01-club-royale-offers-403-live-test.md](research/2026-06-01-club-royale-offers-403-live-test.md)
   records the live 403 diagnosis for the Club Royale offers API.
+- [research/2026-06-01-club-royale-aiohttp-403.md](research/2026-06-01-club-royale-aiohttp-403.md)
+  records the live aiohttp-vs-urllib Club Royale 403 diagnosis.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -82,3 +85,5 @@ does the same for Club Royale offers.
   fixes.
 - [publishing/alpha-14-release-notes.md](publishing/alpha-14-release-notes.md)
   describes the Club Royale offers page priming and authorization-header fixes.
+- [publishing/alpha-15-release-notes.md](publishing/alpha-15-release-notes.md)
+  describes the urllib-backed Club Royale session fix for Home Assistant.

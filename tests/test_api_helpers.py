@@ -645,7 +645,7 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("async_step_account", config_flow_source)
         self.assertIn("async_step_club_royale", config_flow_source)
         self.assertIn("validate_club_royale_input", config_flow_source)
-        self.assertIn("CookieJar", config_flow_source)
+        self.assertIn("RCCLUrllibSession", config_flow_source)
         self.assertIn("RCCLClubRoyaleDataUpdateCoordinator", coordinator_source)
         self.assertIn("async_get_club_royale_data_for_loyalty_id", coordinator_source)
         self.assertIn("ENTRY_TYPE_CLUB_ROYALE", init_source)
@@ -700,6 +700,9 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("CONF_ACCESS_TOKEN", config_flow_source)
         self.assertIn("auth_referer: str | None = None", api_source)
         self.assertIn("async_get_club_royale_data_for_loyalty_id", api_source)
+        self.assertIn("class RCCLUrllibSession", api_source)
+        self.assertIn("HTTPCookieProcessor", api_source)
+        self.assertIn("asyncio.to_thread", api_source)
         self.assertIn("async_prime_club_royale_session", api_source)
         self.assertIn("_request_text", api_source)
         self.assertIn("/club-royale/offers", api_source)
@@ -707,7 +710,9 @@ class SourceContractTest(unittest.TestCase):
             '"authorization": f"Bearer {self._credentials.access_token}"',
             api_source,
         )
+        self.assertIn("raise err from reauth_err", api_source)
         self.assertIn("credentials_from_stored_data", init_source)
+        self.assertIn("RCCLUrllibSession()", init_source)
         club_coordinator = coordinator_source.split(
             "class RCCLClubRoyaleDataUpdateCoordinator", 1
         )[1]

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from aiohttp import CookieJar
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import selector
 
 from .api import (
@@ -17,6 +16,7 @@ from .api import (
     RCCLAuthenticationError,
     RCCLClient,
     RCCLCredentials,
+    RCCLUrllibSession,
     club_royale_loyalty_id,
 )
 from .const import (
@@ -119,7 +119,7 @@ async def validate_club_royale_input(
 
     auth_referer = "https://www.royalcaribbean.com/club-royale/signin"
     authorize_referer = "https://www.royalcaribbean.com/"
-    session = async_create_clientsession(hass, cookie_jar=CookieJar())
+    session = RCCLUrllibSession()
     try:
         credentials = await RCCLClient.async_login(
             session,
