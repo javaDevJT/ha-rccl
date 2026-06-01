@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 import logging
 
+from aiohttp import CookieJar
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
 
 from .api import (
     RCCLApiError,
@@ -21,6 +23,9 @@ from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
     CONF_APP_KEY,
+    CONF_AUTH_REFERER,
+    CONF_AUTHORIZE_REFERER,
+    CONF_CLUB_ROYALE_LOYALTY_ID,
     CONF_ENTRY_TYPE,
     CONF_ID_TOKEN,
     CONF_PASSWORD,
@@ -32,6 +37,7 @@ from .const import (
     CLUB_ROYALE_PLATFORMS,
     DEFAULT_APP_KEY,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_WEB_BASE_URL,
     DOMAIN,
     ENTRY_TYPE_CLUB_ROYALE,
     PLATFORMS,
@@ -101,15 +107,19 @@ async def _async_setup_club_royale_entry(
 
     if not entry.data.get(CONF_USERNAME) or not entry.data.get(CONF_PASSWORD):
         raise ConfigEntryAuthFailed("Club Royale username/password is required")
+    if not entry.data.get(CONF_CLUB_ROYALE_LOYALTY_ID):
+        raise ConfigEntryNotReady("Club Royale loyalty id is required")
 
     interval = timedelta(
         minutes=entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     )
+    session = async_create_clientsession(hass, cookie_jar=CookieJar())
+    credentials = _club_royale_credentials_from_entry(entry)
+    client = RCCLClient(session, credentials)
     coordinator = RCCLClubRoyaleDataUpdateCoordinator(
         hass,
-        entry.data[CONF_USERNAME],
-        entry.data[CONF_PASSWORD],
-        app_key=entry.data.get(CONF_APP_KEY, DEFAULT_APP_KEY),
+        client,
+        str(entry.data[CONF_CLUB_ROYALE_LOYALTY_ID]),
         update_interval=interval,
     )
 
@@ -138,6 +148,33 @@ def _platforms_for_entry(entry: ConfigEntry) -> list[str]:
     if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLUB_ROYALE:
         return CLUB_ROYALE_PLATFORMS
     return PLATFORMS
+
+
+def _club_royale_credentials_from_entry(entry: ConfigEntry) -> RCCLCredentials:
+    """Build Club Royale credentials while supporting alpha 11/12 entries."""
+
+    if entry.data.get(CONF_ACCESS_TOKEN) and entry.data.get(CONF_ACCOUNT_ID):
+        credentials = credentials_from_stored_data(dict(entry.data))
+        if credentials.auth_referer and credentials.authorize_referer:
+            return credentials
+        return replace(
+            credentials,
+            auth_referer=f"{DEFAULT_WEB_BASE_URL}/club-royale/signin",
+            authorize_referer=f"{DEFAULT_WEB_BASE_URL}/",
+        )
+
+    return RCCLCredentials(
+        access_token="",
+        account_id=str(entry.data.get(CONF_ACCOUNT_ID) or entry.entry_id),
+        app_key=entry.data.get(CONF_APP_KEY, DEFAULT_APP_KEY),
+        vds_id=entry.data.get(CONF_VDS_ID) or entry.data.get(CONF_ACCOUNT_ID),
+        username=entry.data[CONF_USERNAME],
+        password=entry.data[CONF_PASSWORD],
+        auth_referer=entry.data.get(CONF_AUTH_REFERER)
+        or f"{DEFAULT_WEB_BASE_URL}/club-royale/signin",
+        authorize_referer=entry.data.get(CONF_AUTHORIZE_REFERER)
+        or f"{DEFAULT_WEB_BASE_URL}/",
+    )
 
 
 async def _credentials_from_entry(

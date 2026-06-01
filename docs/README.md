@@ -37,6 +37,9 @@ that reads credentials from environment variables.
   hanging without a result frame.
 - [research/2026-06-01-club-royale-alpha-12-regressions.md](research/2026-06-01-club-royale-alpha-12-regressions.md)
   records the unlabeled menu and Club Royale setup-failure diagnosis.
+- [research/2026-06-01-club-royale-session-management.md](research/2026-06-01-club-royale-session-management.md)
+  records the Home Assistant-managed aiohttp session and Club Royale credential
+  reuse fixes.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -71,3 +74,6 @@ that reads credentials from environment variables.
   describes the separate Club Royale config path and entity-backed card data.
 - [publishing/alpha-12-release-notes.md](publishing/alpha-12-release-notes.md)
   describes the Club Royale config menu label and nonblocking setup fixes.
+- [publishing/alpha-13-release-notes.md](publishing/alpha-13-release-notes.md)
+  describes the Home Assistant aiohttp session and Club Royale credential reuse
+  fixes.

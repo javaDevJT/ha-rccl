@@ -23,6 +23,8 @@ from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
     CONF_APP_KEY,
+    CONF_AUTH_REFERER,
+    CONF_AUTHORIZE_REFERER,
     CONF_CLUB_ROYALE_LOYALTY_ID,
     CONF_ENTRY_TYPE,
     CONF_ID_TOKEN,
@@ -115,14 +117,16 @@ async def validate_club_royale_input(
 ) -> dict[str, Any]:
     """Validate Club Royale input with a standalone browser session."""
 
+    auth_referer = "https://www.royalcaribbean.com/club-royale/signin"
+    authorize_referer = "https://www.royalcaribbean.com/"
     session = async_create_clientsession(hass, cookie_jar=CookieJar())
     try:
         credentials = await RCCLClient.async_login(
             session,
             data[CONF_USERNAME],
             data[CONF_PASSWORD],
-            auth_referer="https://www.royalcaribbean.com/club-royale/signin",
-            authorize_referer="https://www.royalcaribbean.com/",
+            auth_referer=auth_referer,
+            authorize_referer=authorize_referer,
         )
         client = RCCLClient(session, credentials)
         account = await client.async_get_club_royale_account()
@@ -133,8 +137,6 @@ async def validate_club_royale_input(
         raise InvalidAuth from err
     except RCCLApiError as err:
         raise CannotConnect from err
-    finally:
-        await session.close()
 
     return {
         "title": "Club Royale Offers",
@@ -170,15 +172,26 @@ def _club_royale_entry_data(
 ) -> dict[str, Any]:
     """Return config-entry data for a Club Royale offers entry."""
 
-    return {
+    entry_data = {
         CONF_ENTRY_TYPE: ENTRY_TYPE_CLUB_ROYALE,
         CONF_USERNAME: data[CONF_USERNAME].strip(),
         CONF_PASSWORD: data[CONF_PASSWORD],
+        CONF_ACCESS_TOKEN: credentials.access_token,
         CONF_ACCOUNT_ID: credentials.account_id,
         CONF_APP_KEY: credentials.app_key,
+        CONF_VDS_ID: credentials.vds_id,
+        CONF_AUTH_REFERER: credentials.auth_referer,
+        CONF_AUTHORIZE_REFERER: credentials.authorize_referer,
         CONF_CLUB_ROYALE_LOYALTY_ID: loyalty_id,
         CONF_SCAN_INTERVAL: data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
     }
+    if credentials.refresh_token:
+        entry_data[CONF_REFRESH_TOKEN] = credentials.refresh_token
+    if credentials.id_token:
+        entry_data[CONF_ID_TOKEN] = credentials.id_token
+    if credentials.expires_at:
+        entry_data[CONF_TOKEN_EXPIRES_AT] = credentials.expires_at
+    return entry_data
 
 
 class RCCLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

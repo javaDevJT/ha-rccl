@@ -91,9 +91,6 @@ async def websocket_club_royale_sailings(
             entry_sailings = []
             error = f"Club Royale failed: {err}"
             errors.append({"entry_id": entry.entry_id, "message": error})
-        finally:
-            await session.close()
-
         entry_result = {"entry_id": entry.entry_id, "sailings": entry_sailings}
         matching_error = next(
             (item["message"] for item in errors if item["entry_id"] == entry.entry_id),

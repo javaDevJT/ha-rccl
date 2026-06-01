@@ -6,13 +6,11 @@ from datetime import timedelta
 import logging
 from typing import Any
 
-from aiohttp import CookieJar
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import RCCLApiError, RCCLAuthenticationError, RCCLClient
+from .api import RCCLApiError, RCCLAuthenticationError, RCCLClient, club_royale_sailings
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,10 +52,9 @@ class RCCLClubRoyaleDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]])
     def __init__(
         self,
         hass: HomeAssistant,
-        username: str,
-        password: str,
+        client: RCCLClient,
+        loyalty_id: str,
         *,
-        app_key: str,
         update_interval: timedelta = DEFAULT_UPDATE_INTERVAL,
     ) -> None:
         super().__init__(
@@ -67,27 +64,20 @@ class RCCLClubRoyaleDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]])
             update_interval=update_interval,
             always_update=False,
         )
-        self._hass = hass
-        self._username = username
-        self._password = password
-        self._app_key = app_key
+        self.client = client
+        self._loyalty_id = loyalty_id
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch fresh Club Royale offer sailings."""
 
-        session = async_create_clientsession(self._hass, cookie_jar=CookieJar())
         try:
-            sailings = await RCCLClient.async_fetch_club_royale_sailings(
-                session,
-                self._username,
-                self._password,
-                app_key=self._app_key,
+            club_royale = await self.client.async_get_club_royale_data_for_loyalty_id(
+                self._loyalty_id
             )
+            sailings = club_royale_sailings({"club_royale": club_royale})
         except RCCLAuthenticationError as err:
             raise UpdateFailed(f"Club Royale login failed: {err}") from err
         except RCCLApiError as err:
             raise UpdateFailed(str(err)) from err
-        finally:
-            await session.close()
 
         return {"sailings": sailings}

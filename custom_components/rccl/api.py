@@ -15,6 +15,8 @@ from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
     CONF_APP_KEY,
+    CONF_AUTH_REFERER,
+    CONF_AUTHORIZE_REFERER,
     CONF_ID_TOKEN,
     CONF_PASSWORD,
     CONF_REFRESH_TOKEN,
@@ -70,6 +72,8 @@ class RCCLCredentials:
     password: str | None = None
     api_base_url: str = DEFAULT_API_BASE_URL
     web_base_url: str = DEFAULT_WEB_BASE_URL
+    auth_referer: str | None = None
+    authorize_referer: str | None = None
 
 
 class RCCLClient:
@@ -160,6 +164,8 @@ class RCCLClient:
             app_key=app_key,
             api_base_url=api_base_url,
             web_base_url=web_base_url,
+            auth_referer=auth_referer,
+            authorize_referer=authorize_referer,
         )
 
     async def async_reauthenticate(self) -> None:
@@ -175,6 +181,8 @@ class RCCLClient:
             app_key=self._credentials.app_key,
             api_base_url=self._credentials.api_base_url,
             web_base_url=self._credentials.web_base_url,
+            auth_referer=self._credentials.auth_referer,
+            authorize_referer=self._credentials.authorize_referer,
         )
 
     @classmethod
@@ -272,6 +280,13 @@ class RCCLClient:
         loyalty_id = club_royale_loyalty_id({"account": account})
         if not loyalty_id:
             raise RCCLApiError("RCCL account did not include a loyalty id")
+
+        return await self.async_get_club_royale_data_for_loyalty_id(loyalty_id)
+
+    async def async_get_club_royale_data_for_loyalty_id(
+        self, loyalty_id: str
+    ) -> JsonObject:
+        """Fetch Club Royale offers and per-offer sailing details by loyalty id."""
 
         offers = await self._web_request(
             "POST",
@@ -555,6 +570,8 @@ def credentials_from_oauth_response(
     app_key: str = DEFAULT_APP_KEY,
     api_base_url: str = DEFAULT_API_BASE_URL,
     web_base_url: str = DEFAULT_WEB_BASE_URL,
+    auth_referer: str | None = None,
+    authorize_referer: str | None = None,
 ) -> RCCLCredentials:
     """Create credentials from RCCL's authorize response."""
 
@@ -589,6 +606,8 @@ def credentials_from_oauth_response(
         password=password,
         api_base_url=api_base_url,
         web_base_url=web_base_url,
+        auth_referer=auth_referer,
+        authorize_referer=authorize_referer,
     )
 
 
@@ -605,6 +624,8 @@ def credentials_from_stored_data(data: JsonObject) -> RCCLCredentials:
         expires_at=data.get(CONF_TOKEN_EXPIRES_AT),
         username=data.get(CONF_USERNAME),
         password=data.get(CONF_PASSWORD),
+        auth_referer=data.get(CONF_AUTH_REFERER),
+        authorize_referer=data.get(CONF_AUTHORIZE_REFERER),
     )
 
 

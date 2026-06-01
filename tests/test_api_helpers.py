@@ -640,7 +640,7 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("validate_club_royale_input", config_flow_source)
         self.assertIn("CookieJar", config_flow_source)
         self.assertIn("RCCLClubRoyaleDataUpdateCoordinator", coordinator_source)
-        self.assertIn("async_fetch_club_royale_sailings", coordinator_source)
+        self.assertIn("async_get_club_royale_data_for_loyalty_id", coordinator_source)
         self.assertIn("ENTRY_TYPE_CLUB_ROYALE", init_source)
         self.assertIn("CLUB_ROYALE_PLATFORMS", init_source)
         self.assertIn("ClubRoyaleSummarySensor", sensor_source)
@@ -671,6 +671,34 @@ class SourceContractTest(unittest.TestCase):
         )[1]
         self.assertIn("except RCCLAuthenticationError as err:", club_coordinator)
         self.assertIn('UpdateFailed(f"Club Royale login failed: {err}")', club_coordinator)
+
+    def test_club_royale_sessions_are_ha_managed_and_reuse_entry_credentials(self) -> None:
+        """Club Royale should not close HA sessions or immediately relogin every poll."""
+
+        component_sources = "\n".join(
+            path.read_text()
+            for path in (ROOT / "custom_components" / "rccl").glob("*.py")
+        )
+        api_source = (ROOT / "custom_components" / "rccl" / "api.py").read_text()
+        config_flow_source = (
+            ROOT / "custom_components" / "rccl" / "config_flow.py"
+        ).read_text()
+        coordinator_source = (
+            ROOT / "custom_components" / "rccl" / "coordinator.py"
+        ).read_text()
+        init_source = (ROOT / "custom_components" / "rccl" / "__init__.py").read_text()
+
+        self.assertNotIn("await session.close()", component_sources)
+        self.assertIn("CONF_AUTH_REFERER", config_flow_source)
+        self.assertIn("CONF_ACCESS_TOKEN", config_flow_source)
+        self.assertIn("auth_referer: str | None = None", api_source)
+        self.assertIn("async_get_club_royale_data_for_loyalty_id", api_source)
+        self.assertIn("credentials_from_stored_data", init_source)
+        club_coordinator = coordinator_source.split(
+            "class RCCLClubRoyaleDataUpdateCoordinator", 1
+        )[1]
+        self.assertIn("client: RCCLClient", club_coordinator)
+        self.assertNotIn("async_fetch_club_royale_sailings", club_coordinator)
 
 
 if __name__ == "__main__":
