@@ -3,6 +3,10 @@ const BAR_TOP_OFFSET = 28;
 const BAR_LANE_HEIGHT = 27;
 const MIN_WEEK_HEIGHT = 108;
 const WEEK_BOTTOM_PADDING = 10;
+const MIN_GRID_ROWS = 16;
+const MAX_GRID_ROWS = 24;
+const GRID_ROW_HEIGHT = 56;
+const MAX_CALENDAR_VIEWPORT_HEIGHT = 560;
 
 class RCCLClubRoyaleCalendarCard extends HTMLElement {
   constructor() {
@@ -51,11 +55,11 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 8;
+    return this._estimatedGridRows();
   }
 
   getGridOptions() {
-    return { columns: 12, min_columns: 6, rows: 8 };
+    return { columns: 12, min_columns: 6, rows: this._estimatedGridRows() };
   }
 
   _sendWebsocket(message) {
@@ -119,6 +123,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const visibleSailings = this._visibleSailings(grid.start, grid.end);
     const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
     const weekLaneCounts = this._weekLaneCounts(segments, grid.weekCount);
+    const calendarViewportHeight = this._calendarViewportHeight(weekLaneCounts);
     const selected =
       visibleSailings.find((item) => item.id === this._selectedId) ||
       visibleSailings[0] ||
@@ -131,10 +136,16 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
         }
 
         ha-card {
+          height: 100%;
           overflow: hidden;
         }
 
         .card {
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          min-height: 0;
           padding: 16px;
         }
 
@@ -206,11 +217,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
         }
 
         .calendar-shell {
-          max-height: min(72vh, 720px);
+          border-radius: 8px;
+          max-height: 62vh;
+          min-height: 320px;
           overflow-x: hidden;
           overflow-y: auto;
           overscroll-behavior: contain;
           padding-right: 2px;
+          scrollbar-gutter: stable;
         }
 
         .day {
@@ -318,7 +332,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           }
 
           .calendar-shell {
-            max-height: 70vh;
+            max-height: 58vh;
+            min-height: 300px;
           }
 
           .sailing-bar {
@@ -351,14 +366,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
               <button type="button" data-action="refresh" aria-label="Refresh">&#8635;</button>
             </div>
           </div>
-          ${this._body(grid, visibleSailings, segments, selected, weekLaneCounts)}
+          ${this._body(grid, visibleSailings, segments, selected, weekLaneCounts, calendarViewportHeight)}
         </div>
       </ha-card>
     `;
     this._attachHandlers();
   }
 
-  _body(grid, visibleSailings, segments, selected, weekLaneCounts) {
+  _body(grid, visibleSailings, segments, selected, weekLaneCounts, calendarViewportHeight) {
     if (this._loading && !this._loaded) {
       return `<div class="state">Loading Club Royale sailings...</div>`;
     }
@@ -373,7 +388,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const weekRows = weekLaneCounts.map((count) => `${this._weekRowHeight(count)}px`).join(" ");
     return `
       <div class="weekdays">${weekdays.map((day) => `<div>${day}</div>`).join("")}</div>
-      <div class="calendar-shell">
+      <div class="calendar-shell" tabindex="0" role="region" aria-label="${escapeHtml(monthLabel(this._month))} Club Royale calendar" style="height:${calendarViewportHeight}px;">
         <div class="calendar" style="grid-template-rows:${weekRows};">
           ${grid.days.map((day) => this._dayCell(day)).join("")}
           ${segments.map((segment) => this._segmentBar(segment)).join("")}
@@ -520,6 +535,36 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     return Math.max(
       MIN_WEEK_HEIGHT,
       BAR_TOP_OFFSET + Math.max(laneCount, 1) * BAR_LANE_HEIGHT + WEEK_BOTTOM_PADDING,
+    );
+  }
+
+  _calendarContentHeight(weekLaneCounts) {
+    const rowHeights = weekLaneCounts.map((count) => this._weekRowHeight(count));
+    const rowGaps = Math.max(0, rowHeights.length - 1) * 4;
+    return rowHeights.reduce((sum, height) => sum + height, 0) + rowGaps;
+  }
+
+  _calendarViewportHeight(weekLaneCounts) {
+    return Math.min(
+      this._calendarContentHeight(weekLaneCounts),
+      MAX_CALENDAR_VIEWPORT_HEIGHT,
+    );
+  }
+
+  _estimatedGridRows() {
+    const grid = this._calendarModel();
+    const visibleSailings = this._visibleSailings(grid.start, grid.end);
+    const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
+    const weekLaneCounts = this._weekLaneCounts(segments, grid.weekCount);
+    const calendarHeight = this._calendarViewportHeight(weekLaneCounts);
+    const detailsHeight = visibleSailings.length ? 210 : 90;
+    const headerHeight = 118;
+    return Math.max(
+      MIN_GRID_ROWS,
+      Math.min(
+        MAX_GRID_ROWS,
+        Math.ceil((headerHeight + calendarHeight + detailsHeight) / GRID_ROW_HEIGHT),
+      ),
     );
   }
 

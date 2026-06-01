@@ -657,7 +657,11 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("club_royale_sailing", card_source)
         self.assertIn("_weekLaneCounts", card_source)
         self.assertIn("_weekRowHeight", card_source)
+        self.assertIn("_calendarViewportHeight", card_source)
+        self.assertIn("_estimatedGridRows", card_source)
         self.assertIn("calendar-shell", card_source)
+        self.assertIn("tabindex=\"0\"", card_source)
+        self.assertIn("scrollbar-gutter", card_source)
         self.assertIn("grid-template-rows:${weekRows}", card_source)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
