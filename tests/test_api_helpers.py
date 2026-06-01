@@ -606,10 +606,13 @@ class SourceContractTest(unittest.TestCase):
         self.assertGreaterEqual(init_source.count("await async_setup_frontend(hass)"), 2)
         self.assertIn("_FRONTEND_REGISTERED", frontend_source)
         self.assertIn("async_register_static_paths", frontend_source)
+        self.assertIn("@websocket_api.async_response", frontend_source)
         self.assertIn("_entryIdFromEntities", card_source := (
             ROOT / "custom_components" / "rccl" / "www" / "club-royale-calendar-card.js"
         ).read_text())
         self.assertIn("config_entry_id", card_source)
+        self.assertIn("WEBSOCKET_TIMEOUT_MS", card_source)
+        self.assertIn("_sendWebsocket", card_source)
 
 
 if __name__ == "__main__":

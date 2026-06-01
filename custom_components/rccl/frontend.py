@@ -42,6 +42,7 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
         vol.Optional("entry_id"): str,
     }
 )
+@websocket_api.async_response
 async def websocket_club_royale_sailings(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,

@@ -1,3 +1,5 @@
+const WEBSOCKET_TIMEOUT_MS = 45000;
+
 class RCCLClubRoyaleCalendarCard extends HTMLElement {
   constructor() {
     super();
@@ -43,6 +45,22 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     return { columns: 12, min_columns: 6, rows: 8 };
   }
 
+  _sendWebsocket(message) {
+    const sender = this._hass?.connection?.sendMessagePromise
+      ? this._hass.connection.sendMessagePromise.bind(this._hass.connection)
+      : this._hass?.callWS?.bind(this._hass);
+    if (!sender) {
+      return Promise.reject(new Error("Home Assistant websocket API is unavailable"));
+    }
+
+    const configuredTimeout = Number(this._config.timeout_ms || WEBSOCKET_TIMEOUT_MS);
+    return withTimeout(
+      sender(message),
+      configuredTimeout > 0 ? configuredTimeout : WEBSOCKET_TIMEOUT_MS,
+      "Timed out waiting for Club Royale sailings"
+    );
+  }
+
   async _loadData(force = false) {
     if (!this._hass || this._loading || (this._loaded && !force)) {
       return;
@@ -57,9 +75,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       if (entryId) {
         message.entry_id = entryId;
       }
-      const result = this._hass.callWS
-        ? await this._hass.callWS(message)
-        : await this._hass.connection.sendMessagePromise(message);
+      const result = await this._sendWebsocket(message);
       this._sailings = Array.isArray(result.sailings) ? result.sailings : [];
       if (!this._sailings.length && Array.isArray(result.errors) && result.errors.length) {
         this._error = result.errors.map((item) => item.message).join("; ");
@@ -630,6 +646,14 @@ function colorFor(value) {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   }
   return palette[hash % palette.length];
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
 }
 
 function escapeHtml(value) {

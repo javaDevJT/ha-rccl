@@ -32,6 +32,9 @@ that reads credentials from environment variables.
   records why Club Royale uses a standalone login session.
 - [research/2026-06-01-loyalty-history-and-card-js.md](research/2026-06-01-loyalty-history-and-card-js.md)
   records the loyalty-history query parameter and frontend registration fixes.
+- [research/2026-06-01-club-royale-websocket-data.md](research/2026-06-01-club-royale-websocket-data.md)
+  records the Home Assistant HAR evidence for the Club Royale websocket request
+  hanging without a result frame.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -56,3 +59,5 @@ that reads credentials from environment variables.
   describes the Club Royale standalone-session fix.
 - [publishing/alpha-9-release-notes.md](publishing/alpha-9-release-notes.md)
   describes the past-cruise history and custom-card loading fixes.
+- [publishing/alpha-10-release-notes.md](publishing/alpha-10-release-notes.md)
+  describes the Club Royale websocket data-loading fix.
