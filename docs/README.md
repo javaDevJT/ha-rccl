@@ -99,3 +99,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the Club Royale calendar grid-size and scroll fix.
 - [publishing/alpha-18-release-notes.md](publishing/alpha-18-release-notes.md)
   describes the Club Royale calendar scroll-position fix.
+- [publishing/alpha-19-release-notes.md](publishing/alpha-19-release-notes.md)
+  describes the in-place Club Royale sailing selection fix.

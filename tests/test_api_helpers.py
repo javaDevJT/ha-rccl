@@ -663,10 +663,20 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_currentCalendarScrollTop", card_source)
         self.assertIn("_restoreCalendarScroll", card_source)
         self.assertIn("_resetCalendarScrollOnRender", card_source)
+        self.assertIn("_calendarScrollStorageKey", card_source)
+        self.assertIn("sessionStorage", card_source)
+        self.assertIn("_syncSelectedSailing", card_source)
+        self.assertIn("_detailsContent", card_source)
+        self.assertIn("data-sailing-details", card_source)
         self.assertIn("calendar-shell", card_source)
         self.assertIn("tabindex=\"0\"", card_source)
         self.assertIn("scrollbar-gutter", card_source)
         self.assertIn("grid-template-rows:${weekRows}", card_source)
+        select_body = card_source.split("  _selectSailing", 1)[1].split(
+            "\n  _attachHandlers", 1
+        )[0]
+        self.assertNotIn("this._render()", select_body)
+        self.assertIn("this._syncSelectedSailing()", select_body)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""

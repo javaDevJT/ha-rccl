@@ -21,6 +21,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._selectedId = undefined;
     this._calendarScrollTop = 0;
     this._resetCalendarScrollOnRender = false;
+    this._configInitialized = false;
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -34,9 +35,10 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           month.getFullYear() !== this._month.getFullYear() ||
           month.getMonth() !== this._month.getMonth();
         this._month = month;
-        this._resetCalendarScrollOnRender = monthChanged;
+        this._resetCalendarScrollOnRender = this._configInitialized && monthChanged;
       }
     }
+    this._configInitialized = true;
     this._render();
   }
 
@@ -451,6 +453,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     if (!sailing) {
       return "";
     }
+    return `
+      <div class="details" data-sailing-details>
+        ${this._detailsContent(sailing)}
+      </div>
+    `;
+  }
+
+  _detailsContent(sailing) {
     const rows = [
       ["Impacts", `${formatDate(sailing.sail_date)} through ${formatDate(sailing.return_date)}`],
       ["Sailing", sailing.sailing_type || sailing.itinerary_description || sailing.itinerary_name],
@@ -464,18 +474,16 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     ].filter((row) => row[1]);
 
     return `
-      <div class="details">
-        <div class="details-title">${escapeHtml(sailing.calendar_title)}</div>
-        <div class="detail-grid">
-          ${rows
-            .map(
-              ([label, value]) => `
-                <div class="detail-label">${escapeHtml(label)}</div>
-                <div class="detail-value">${escapeHtml(value)}</div>
-              `,
-            )
-            .join("")}
-        </div>
+      <div class="details-title">${escapeHtml(sailing.calendar_title)}</div>
+      <div class="detail-grid">
+        ${rows
+          .map(
+            ([label, value]) => `
+              <div class="detail-label">${escapeHtml(label)}</div>
+              <div class="detail-value">${escapeHtml(value)}</div>
+            `,
+          )
+          .join("")}
       </div>
     `;
   }
@@ -581,12 +589,16 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
   _currentCalendarScrollTop() {
     const shell = this.shadowRoot?.querySelector(".calendar-shell");
-    return shell ? shell.scrollTop : this._calendarScrollTop;
+    if (shell) {
+      return shell.scrollTop;
+    }
+    return this._calendarScrollTop || this._storedCalendarScrollTop();
   }
 
   _restoreCalendarScroll(scrollTop) {
     const targetScrollTop = Math.max(0, Number(scrollTop) || 0);
     this._calendarScrollTop = targetScrollTop;
+    this._saveCalendarScrollTop(targetScrollTop);
     const shell = this.shadowRoot?.querySelector(".calendar-shell");
     if (!shell) {
       return;
@@ -595,16 +607,46 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const applyScrollTop = () => {
       shell.scrollTop = targetScrollTop;
       this._calendarScrollTop = shell.scrollTop;
+      this._saveCalendarScrollTop(this._calendarScrollTop);
     };
     applyScrollTop();
     shell.addEventListener(
       "scroll",
       () => {
         this._calendarScrollTop = shell.scrollTop;
+        this._saveCalendarScrollTop(this._calendarScrollTop);
       },
       { passive: true },
     );
     window.requestAnimationFrame?.(applyScrollTop);
+  }
+
+  _storedCalendarScrollTop() {
+    try {
+      return Math.max(
+        0,
+        Number(window.sessionStorage?.getItem(this._calendarScrollStorageKey())) || 0,
+      );
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  _saveCalendarScrollTop(scrollTop) {
+    try {
+      window.sessionStorage?.setItem(
+        this._calendarScrollStorageKey(),
+        String(Math.max(0, Number(scrollTop) || 0)),
+      );
+    } catch (err) {
+      // Storage can be unavailable in some embedded browser contexts.
+    }
+  }
+
+  _calendarScrollStorageKey() {
+    const month = `${this._month.getFullYear()}-${String(this._month.getMonth() + 1).padStart(2, "0")}`;
+    const scope = this._config.entry_id || this._entryIdFromEntities() || this._config.title || "default";
+    return `rccl:club-royale-calendar:${scope}:${month}`;
   }
 
   _selectSailing(sailingId) {
@@ -612,7 +654,20 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       return;
     }
     this._selectedId = sailingId;
-    this._render();
+    this._syncSelectedSailing();
+  }
+
+  _syncSelectedSailing() {
+    const selectedId = String(this._selectedId || "");
+    this.shadowRoot?.querySelectorAll(".sailing-bar").forEach((bar) => {
+      bar.classList.toggle("selected", bar.dataset.sailingId === selectedId);
+    });
+
+    const selected = this._sailings.find((sailing) => String(sailing.id) === selectedId);
+    const details = this.shadowRoot?.querySelector("[data-sailing-details]");
+    if (selected && details) {
+      details.innerHTML = this._detailsContent(selected);
+    }
   }
 
   _attachHandlers() {
