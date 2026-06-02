@@ -693,6 +693,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_filterValue", card_source)
         self.assertIn("_setFilter", card_source)
         self.assertIn("_resetFilters", card_source)
+        self.assertIn("_applyEntitySailings", card_source)
+        self.assertIn("_sailingsSignature", card_source)
         self.assertIn("data-filter-key", card_source)
         self.assertIn("Ship", card_source)
         self.assertIn("Offer type", card_source)

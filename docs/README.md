@@ -54,6 +54,8 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   records the scroll-position preservation fix for card re-renders.
 - [research/2026-06-02-club-royale-card-filters.md](research/2026-06-02-club-royale-card-filters.md)
   records the Club Royale card filter controls and field mappings.
+- [research/2026-06-02-club-royale-dropdown-rerender.md](research/2026-06-02-club-royale-dropdown-rerender.md)
+  records the fix for dropdowns closing on unchanged Home Assistant updates.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -105,3 +107,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the in-place Club Royale sailing selection fix.
 - [publishing/alpha-20-release-notes.md](publishing/alpha-20-release-notes.md)
   describes the Club Royale card filter controls.
+- [publishing/alpha-21-release-notes.md](publishing/alpha-21-release-notes.md)
+  describes the Club Royale dropdown re-render fix.

@@ -30,6 +30,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._resetCalendarScrollOnRender = false;
     this._configInitialized = false;
     this._filters = {};
+    this._sailingsDataSignature = "";
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -54,11 +55,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._hass = hass;
     const entitySailings = this._sailingsFromEntities();
     if (entitySailings.length || this._hasClubRoyaleEntitySource()) {
-      this._applySailings(entitySailings);
-      this._loaded = true;
-      this._loading = false;
-      this._error = undefined;
-      this._render();
+      if (this._applyEntitySailings(entitySailings)) {
+        this._render();
+      }
       return;
     }
     if (!this._loaded && !this._loading) {
@@ -100,10 +99,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     }
     const entitySailings = this._sailingsFromEntities();
     if (entitySailings.length || this._hasClubRoyaleEntitySource()) {
-      this._applySailings(entitySailings);
-      this._loaded = true;
-      this._error = undefined;
-      this._render();
+      if (this._applyEntitySailings(entitySailings)) {
+        this._render();
+      }
       return;
     }
     this._loading = true;
@@ -827,6 +825,18 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._render();
   }
 
+  _applyEntitySailings(entitySailings) {
+    const dataChanged = this._sailingsSignature(entitySailings) !== this._sailingsDataSignature;
+    const stateChanged = !this._loaded || this._loading || this._error !== undefined;
+    if (dataChanged) {
+      this._applySailings(entitySailings);
+    }
+    this._loaded = true;
+    this._loading = false;
+    this._error = undefined;
+    return dataChanged || stateChanged;
+  }
+
   _syncSelectedSailing() {
     const selectedId = String(this._selectedId || "");
     this.shadowRoot?.querySelectorAll(".sailing-bar").forEach((bar) => {
@@ -882,9 +892,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
   _applySailings(sailings) {
     this._sailings = sailings;
-    if (!this._selectedId || !this._sailings.some((item) => item.id === this._selectedId)) {
+    this._sailingsDataSignature = this._sailingsSignature(sailings);
+    if (!this._selectedId || !this._sailings.some((item) => String(item.id) === String(this._selectedId))) {
       this._selectedId = this._sailings[0]?.id;
     }
+  }
+
+  _sailingsSignature(sailings) {
+    return stableStringify(sailings);
   }
 
   _sailingsFromEntities() {
@@ -1066,6 +1081,19 @@ function colorFor(value) {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   }
   return palette[hash % palette.length];
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function withTimeout(promise, timeoutMs, message) {
