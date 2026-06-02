@@ -19,6 +19,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._loaded = false;
     this._error = undefined;
     this._selectedId = undefined;
+    this._calendarScrollTop = 0;
+    this._resetCalendarScrollOnRender = false;
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -28,7 +30,11 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     if (this._config.month) {
       const month = parseMonth(this._config.month);
       if (month) {
+        const monthChanged =
+          month.getFullYear() !== this._month.getFullYear() ||
+          month.getMonth() !== this._month.getMonth();
         this._month = month;
+        this._resetCalendarScrollOnRender = monthChanged;
       }
     }
     this._render();
@@ -119,6 +125,10 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       return;
     }
 
+    const calendarScrollTop = this._resetCalendarScrollOnRender
+      ? 0
+      : this._currentCalendarScrollTop();
+    this._resetCalendarScrollOnRender = false;
     const grid = this._calendarModel();
     const visibleSailings = this._visibleSailings(grid.start, grid.end);
     const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
@@ -371,6 +381,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       </ha-card>
     `;
     this._attachHandlers();
+    this._restoreCalendarScroll(calendarScrollTop);
   }
 
   _body(grid, visibleSailings, segments, selected, weekLaneCounts, calendarViewportHeight) {
@@ -568,17 +579,56 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     );
   }
 
+  _currentCalendarScrollTop() {
+    const shell = this.shadowRoot?.querySelector(".calendar-shell");
+    return shell ? shell.scrollTop : this._calendarScrollTop;
+  }
+
+  _restoreCalendarScroll(scrollTop) {
+    const targetScrollTop = Math.max(0, Number(scrollTop) || 0);
+    this._calendarScrollTop = targetScrollTop;
+    const shell = this.shadowRoot?.querySelector(".calendar-shell");
+    if (!shell) {
+      return;
+    }
+
+    const applyScrollTop = () => {
+      shell.scrollTop = targetScrollTop;
+      this._calendarScrollTop = shell.scrollTop;
+    };
+    applyScrollTop();
+    shell.addEventListener(
+      "scroll",
+      () => {
+        this._calendarScrollTop = shell.scrollTop;
+      },
+      { passive: true },
+    );
+    window.requestAnimationFrame?.(applyScrollTop);
+  }
+
+  _selectSailing(sailingId) {
+    if (!sailingId || sailingId === this._selectedId) {
+      return;
+    }
+    this._selectedId = sailingId;
+    this._render();
+  }
+
   _attachHandlers() {
     this.shadowRoot.querySelectorAll("[data-action]").forEach((button) => {
       button.addEventListener("click", () => {
         const action = button.dataset.action;
         if (action === "previous") {
           this._month = new Date(this._month.getFullYear(), this._month.getMonth() - 1, 1);
+          this._resetCalendarScrollOnRender = true;
         } else if (action === "next") {
           this._month = new Date(this._month.getFullYear(), this._month.getMonth() + 1, 1);
+          this._resetCalendarScrollOnRender = true;
         } else if (action === "today") {
           const now = new Date();
           this._month = new Date(now.getFullYear(), now.getMonth(), 1);
+          this._resetCalendarScrollOnRender = true;
         } else if (action === "refresh") {
           this._loaded = false;
           this._loadData(true);
@@ -589,10 +639,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     });
 
     this.shadowRoot.querySelectorAll(".sailing-bar").forEach((bar) => {
-      const select = () => {
-        this._selectedId = bar.dataset.sailingId;
-        this._render();
-      };
+      const select = () => this._selectSailing(bar.dataset.sailingId);
       bar.addEventListener("mouseenter", select);
       bar.addEventListener("focus", select);
       bar.addEventListener("click", select);

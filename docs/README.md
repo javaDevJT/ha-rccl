@@ -50,6 +50,8 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   records the custom-card dense-month overflow diagnosis and fix.
 - [research/2026-06-01-club-royale-calendar-scroll.md](research/2026-06-01-club-royale-calendar-scroll.md)
   records the Home Assistant card-size clipping and internal-scroll fix.
+- [research/2026-06-02-club-royale-calendar-scroll-position.md](research/2026-06-02-club-royale-calendar-scroll-position.md)
+  records the scroll-position preservation fix for card re-renders.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -95,3 +97,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the Club Royale calendar dense-month layout fix.
 - [publishing/alpha-17-release-notes.md](publishing/alpha-17-release-notes.md)
   describes the Club Royale calendar grid-size and scroll fix.
+- [publishing/alpha-18-release-notes.md](publishing/alpha-18-release-notes.md)
+  describes the Club Royale calendar scroll-position fix.
