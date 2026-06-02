@@ -31,6 +31,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._configInitialized = false;
     this._filters = {};
     this._sailingsDataSignature = "";
+    this._pendingRender = false;
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -48,7 +49,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       }
     }
     this._configInitialized = true;
-    this._render();
+    this._renderOrDefer();
   }
 
   set hass(hass) {
@@ -56,7 +57,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const entitySailings = this._sailingsFromEntities();
     if (entitySailings.length || this._hasClubRoyaleEntitySource()) {
       if (this._applyEntitySailings(entitySailings)) {
-        this._render();
+        this._renderOrDefer();
       }
       return;
     }
@@ -100,13 +101,13 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const entitySailings = this._sailingsFromEntities();
     if (entitySailings.length || this._hasClubRoyaleEntitySource()) {
       if (this._applyEntitySailings(entitySailings)) {
-        this._render();
+        this._renderOrDefer();
       }
       return;
     }
     this._loading = true;
     this._error = undefined;
-    this._render();
+    this._renderOrDefer();
 
     try {
       const message = { type: "rccl/club_royale_sailings" };
@@ -124,7 +125,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       this._error = err?.message || String(err);
     } finally {
       this._loading = false;
-      this._render();
+      this._renderOrDefer();
     }
   }
 
@@ -132,6 +133,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     if (!this.shadowRoot) {
       return;
     }
+    this._pendingRender = false;
 
     const calendarScrollTop = this._resetCalendarScrollOnRender
       ? 0
@@ -825,6 +827,27 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._render();
   }
 
+  _renderOrDefer() {
+    if (this._hasFocusedFilterControl()) {
+      this._pendingRender = true;
+      return;
+    }
+    this._render();
+  }
+
+  _hasFocusedFilterControl() {
+    const active = this.shadowRoot?.activeElement;
+    return Boolean(active?.dataset?.filterKey || active?.matches?.("[data-filter-key]"));
+  }
+
+  _flushDeferredRender() {
+    if (!this._pendingRender || this._hasFocusedFilterControl()) {
+      return;
+    }
+    this._pendingRender = false;
+    this._render();
+  }
+
   _applyEntitySailings(entitySailings) {
     const dataChanged = this._sailingsSignature(entitySailings) !== this._sailingsDataSignature;
     const stateChanged = !this._loaded || this._loading || this._error !== undefined;
@@ -879,6 +902,13 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this.shadowRoot.querySelectorAll("[data-filter-key]").forEach((select) => {
       select.addEventListener("change", () => {
         this._setFilter(select.dataset.filterKey, select.value);
+      });
+      select.addEventListener("blur", () => {
+        if (window.requestAnimationFrame) {
+          window.requestAnimationFrame(() => this._flushDeferredRender());
+          return;
+        }
+        window.setTimeout(() => this._flushDeferredRender(), 0);
       });
     });
 

@@ -27,10 +27,21 @@ DOM replacement.
 - Preserve intentional renders for filter changes, month navigation, refresh,
   and real entity data changes.
 
+Alpha 21 reduced passive re-renders, but live behavior could still close an open
+dropdown when a legitimate data/config render arrived while a filter was
+focused. Alpha 22 adds a focused-filter render deferral:
+
+- If a filter control has focus, passive renders are marked pending instead of
+  immediately replacing the shadow DOM.
+- The pending render is flushed after the filter loses focus.
+- User-driven filter changes still render immediately after the native dropdown
+  closes.
+
 ## Verification
 
 Local card simulations confirmed:
 
 - Two identical `hass` updates produce one render.
 - A changed sailing value produces a second render and updates the stored data.
-
+- A changed sailing value while a filter is focused defers the render, then
+  flushes exactly once after focus clears.

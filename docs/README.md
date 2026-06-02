@@ -109,3 +109,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the Club Royale card filter controls.
 - [publishing/alpha-21-release-notes.md](publishing/alpha-21-release-notes.md)
   describes the Club Royale dropdown re-render fix.
+- [publishing/alpha-22-release-notes.md](publishing/alpha-22-release-notes.md)
+  describes the focused-filter render deferral fix.
