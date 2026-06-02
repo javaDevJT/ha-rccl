@@ -7,6 +7,13 @@ const MIN_GRID_ROWS = 16;
 const MAX_GRID_ROWS = 24;
 const GRID_ROW_HEIGHT = 56;
 const MAX_CALENDAR_VIEWPORT_HEIGHT = 560;
+const FILTER_DEFINITIONS = [
+  { key: "ship", label: "Ship", all: "All ships" },
+  { key: "offer_type", label: "Offer type", all: "All offer types" },
+  { key: "offer", label: "Offer", all: "All offers" },
+  { key: "departure", label: "Departure", all: "All departures" },
+  { key: "nights", label: "Nights", all: "All nights" },
+];
 
 class RCCLClubRoyaleCalendarCard extends HTMLElement {
   constructor() {
@@ -22,6 +29,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._calendarScrollTop = 0;
     this._resetCalendarScrollOnRender = false;
     this._configInitialized = false;
+    this._filters = {};
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -132,7 +140,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       : this._currentCalendarScrollTop();
     this._resetCalendarScrollOnRender = false;
     const grid = this._calendarModel();
-    const visibleSailings = this._visibleSailings(grid.start, grid.end);
+    const filteredSailings = this._filteredSailings();
+    const visibleSailings = this._visibleSailings(grid.start, grid.end, filteredSailings);
     const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
     const weekLaneCounts = this._weekLaneCounts(segments, grid.weekCount);
     const calendarViewportHeight = this._calendarViewportHeight(weekLaneCounts);
@@ -140,6 +149,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       visibleSailings.find((item) => item.id === this._selectedId) ||
       visibleSailings[0] ||
       this._sailings[0];
+    if (selected && visibleSailings.some((item) => String(item.id) === String(selected.id))) {
+      this._selectedId = selected.id;
+    }
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -193,21 +205,58 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           flex-shrink: 0;
         }
 
-        button {
+        button,
+        select {
           border: 1px solid var(--divider-color);
           border-radius: 8px;
           background: var(--card-background-color);
           color: var(--primary-text-color);
+        }
+
+        button {
           min-width: 34px;
           height: 32px;
           padding: 0 10px;
           cursor: pointer;
         }
 
+        select {
+          box-sizing: border-box;
+          width: 100%;
+          min-height: 34px;
+          padding: 0 26px 0 9px;
+          font: inherit;
+        }
+
         button:focus-visible,
+        select:focus-visible,
         .sailing-bar:focus-visible {
           outline: 2px solid var(--primary-color);
           outline-offset: 2px;
+        }
+
+        .filters {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(108px, 1fr)) auto;
+          gap: 8px;
+          align-items: end;
+          margin-bottom: 12px;
+        }
+
+        .filter {
+          min-width: 0;
+        }
+
+        .filter-label {
+          display: block;
+          margin-bottom: 3px;
+          color: var(--secondary-text-color);
+          font-size: 11px;
+          font-weight: 650;
+        }
+
+        .filter-reset {
+          white-space: nowrap;
         }
 
         .weekdays {
@@ -343,6 +392,14 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
             flex-direction: column;
           }
 
+          .filters {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .filter-reset {
+            grid-column: 1 / -1;
+          }
+
           .calendar-shell {
             max-height: 58vh;
             min-height: 300px;
@@ -399,7 +456,11 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
     const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const weekRows = weekLaneCounts.map((count) => `${this._weekRowHeight(count)}px`).join(" ");
+    const emptyMessage = this._hasActiveFilters()
+      ? `No Club Royale sailings match the selected filters for ${monthLabel(this._month)}.`
+      : `No Club Royale sailings found for ${monthLabel(this._month)}.`;
     return `
+      ${this._filterBar()}
       <div class="weekdays">${weekdays.map((day) => `<div>${day}</div>`).join("")}</div>
       <div class="calendar-shell" tabindex="0" role="region" aria-label="${escapeHtml(monthLabel(this._month))} Club Royale calendar" style="height:${calendarViewportHeight}px;">
         <div class="calendar" style="grid-template-rows:${weekRows};">
@@ -407,7 +468,38 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           ${segments.map((segment) => this._segmentBar(segment)).join("")}
         </div>
       </div>
-      ${visibleSailings.length ? this._details(selected) : `<div class="state">No Club Royale sailings found for ${escapeHtml(monthLabel(this._month))}.</div>`}
+      ${visibleSailings.length ? this._details(selected) : `<div class="state">${escapeHtml(emptyMessage)}</div>`}
+    `;
+  }
+
+  _filterBar() {
+    const filters = FILTER_DEFINITIONS.map((definition) => this._filterSelect(definition)).join("");
+    const resetDisabled = this._hasActiveFilters() ? "" : " disabled";
+    return `
+      <div class="filters" aria-label="Club Royale sailing filters">
+        ${filters}
+        <button type="button" class="filter-reset" data-action="reset-filters"${resetDisabled}>Reset</button>
+      </div>
+    `;
+  }
+
+  _filterSelect(definition) {
+    const options = this._filterOptions(definition.key);
+    const selectedValue = this._filters[definition.key] || "";
+    return `
+      <label class="filter">
+        <span class="filter-label">${escapeHtml(definition.label)}</span>
+        <select data-filter-key="${escapeHtml(definition.key)}" aria-label="${escapeHtml(definition.label)} filter">
+          <option value="">${escapeHtml(definition.all)}</option>
+          ${options
+            .map(
+              (option) => `
+                <option value="${escapeHtml(option.value)}"${option.value === selectedValue ? " selected" : ""}>${escapeHtml(option.label)}</option>
+              `,
+            )
+            .join("")}
+        </select>
+      </label>
     `;
   }
 
@@ -504,8 +596,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     return { start, end, days, weekCount: days.length / 7 };
   }
 
-  _visibleSailings(start, end) {
-    return this._sailings
+  _visibleSailings(start, end, sailings = this._filteredSailings()) {
+    return sailings
       .map((sailing) => ({
         ...sailing,
         _start: parseDate(sailing.sail_date),
@@ -513,6 +605,57 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       }))
       .filter((sailing) => sailing._start && sailing._end && sailing._start <= end && sailing._end >= start)
       .sort((a, b) => a._start - b._start || String(a.ship_name).localeCompare(String(b.ship_name)));
+  }
+
+  _filteredSailings() {
+    return this._sailings.filter((sailing) =>
+      FILTER_DEFINITIONS.every((definition) => {
+        const selected = this._filters[definition.key];
+        return !selected || this._filterValue(sailing, definition.key) === selected;
+      }),
+    );
+  }
+
+  _filterOptions(key) {
+    const values = new Map();
+    for (const sailing of this._sailings) {
+      const value = this._filterValue(sailing, key);
+      if (value) {
+        values.set(value, { value, label: value });
+      }
+    }
+    const options = Array.from(values.values());
+    if (key === "nights") {
+      return options.sort((left, right) => Number(left.value.match(/\d+/)?.[0] || 0) - Number(right.value.match(/\d+/)?.[0] || 0));
+    }
+    return options.sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  _filterValue(sailing, key) {
+    if (key === "ship") {
+      return sailing.ship_name || sailing.ship_code || "";
+    }
+    if (key === "offer_type") {
+      return compactJoin([sailing.offer_type, sailing.offer_occupancy_label], " - ");
+    }
+    if (key === "offer") {
+      return compactJoin([sailing.offer_name, sailing.offer_code], " - ");
+    }
+    if (key === "departure") {
+      return portLabel(sailing.departure_port);
+    }
+    if (key === "nights") {
+      const nights = Number(sailing.total_nights);
+      if (!Number.isFinite(nights) || nights <= 0) {
+        return "";
+      }
+      return `${nights} night${nights === 1 ? "" : "s"}`;
+    }
+    return "";
+  }
+
+  _hasActiveFilters() {
+    return FILTER_DEFINITIONS.some((definition) => Boolean(this._filters[definition.key]));
   }
 
   _segments(sailings, gridStart, weekCount) {
@@ -657,6 +800,33 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._syncSelectedSailing();
   }
 
+  _setFilter(key, value) {
+    if (!FILTER_DEFINITIONS.some((definition) => definition.key === key)) {
+      return;
+    }
+    if (value) {
+      this._filters[key] = value;
+    } else {
+      delete this._filters[key];
+    }
+    this._resetCalendarScrollOnRender = true;
+    const filteredSailings = this._filteredSailings();
+    if (!filteredSailings.some((sailing) => String(sailing.id) === String(this._selectedId))) {
+      this._selectedId = filteredSailings[0]?.id;
+    }
+    this._render();
+  }
+
+  _resetFilters() {
+    if (!this._hasActiveFilters()) {
+      return;
+    }
+    this._filters = {};
+    this._resetCalendarScrollOnRender = true;
+    this._selectedId = this._sailings[0]?.id;
+    this._render();
+  }
+
   _syncSelectedSailing() {
     const selectedId = String(this._selectedId || "");
     this.shadowRoot?.querySelectorAll(".sailing-bar").forEach((bar) => {
@@ -688,8 +858,17 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           this._loaded = false;
           this._loadData(true);
           return;
+        } else if (action === "reset-filters") {
+          this._resetFilters();
+          return;
         }
         this._render();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll("[data-filter-key]").forEach((select) => {
+      select.addEventListener("change", () => {
+        this._setFilter(select.dataset.filterKey, select.value);
       });
     });
 

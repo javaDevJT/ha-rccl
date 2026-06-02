@@ -673,10 +673,37 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("scrollbar-gutter", card_source)
         self.assertIn("grid-template-rows:${weekRows}", card_source)
         select_body = card_source.split("  _selectSailing", 1)[1].split(
-            "\n  _attachHandlers", 1
+            "\n  _setFilter", 1
         )[0]
         self.assertNotIn("this._render()", select_body)
         self.assertIn("this._syncSelectedSailing()", select_body)
+
+    def test_club_royale_card_has_filter_controls(self) -> None:
+        """The Club Royale card should filter sailings by useful offer facets."""
+
+        card_source = (
+            ROOT / "custom_components" / "rccl" / "www" / "club-royale-calendar-card.js"
+        ).read_text()
+
+        self.assertIn("_filters", card_source)
+        self.assertIn("_filteredSailings", card_source)
+        self.assertIn("_filterOptions", card_source)
+        self.assertIn("_filterBar", card_source)
+        self.assertIn("_filterSelect", card_source)
+        self.assertIn("_filterValue", card_source)
+        self.assertIn("_setFilter", card_source)
+        self.assertIn("_resetFilters", card_source)
+        self.assertIn("data-filter-key", card_source)
+        self.assertIn("Ship", card_source)
+        self.assertIn("Offer type", card_source)
+        self.assertIn("Offer", card_source)
+        self.assertIn("Departure", card_source)
+        self.assertIn("Nights", card_source)
+        self.assertIn("ship", card_source)
+        self.assertIn("offer_type", card_source)
+        self.assertIn("offer", card_source)
+        self.assertIn("departure", card_source)
+        self.assertIn("nights", card_source)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""

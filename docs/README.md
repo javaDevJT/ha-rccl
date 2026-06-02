@@ -52,6 +52,8 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   records the Home Assistant card-size clipping and internal-scroll fix.
 - [research/2026-06-02-club-royale-calendar-scroll-position.md](research/2026-06-02-club-royale-calendar-scroll-position.md)
   records the scroll-position preservation fix for card re-renders.
+- [research/2026-06-02-club-royale-card-filters.md](research/2026-06-02-club-royale-card-filters.md)
+  records the Club Royale card filter controls and field mappings.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -101,3 +103,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the Club Royale calendar scroll-position fix.
 - [publishing/alpha-19-release-notes.md](publishing/alpha-19-release-notes.md)
   describes the in-place Club Royale sailing selection fix.
+- [publishing/alpha-20-release-notes.md](publishing/alpha-20-release-notes.md)
+  describes the Club Royale card filter controls.
