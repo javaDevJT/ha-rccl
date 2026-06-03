@@ -732,11 +732,17 @@ class SourceContractTest(unittest.TestCase):
         brand_dir = ROOT / "custom_components" / "rccl" / "brand"
         manifest_source = (ROOT / "custom_components" / "rccl" / "manifest.json").read_text()
         pyproject_source = (ROOT / "pyproject.toml").read_text()
+        generator_source = (ROOT / "scripts" / "generate_brand_assets.py").read_text()
 
+        self.assertTrue((brand_dir / "logo.svg").is_file())
         self.assertTrue((brand_dir / "icon.png").is_file())
         self.assertTrue((brand_dir / "logo.png").is_file())
-        self.assertIn('"version": "0.1.0-alpha.23"', manifest_source)
-        self.assertIn('version = "0.1.0a23"', pyproject_source)
+        self.assertIn('"version": "0.1.0-alpha.24"', manifest_source)
+        self.assertIn('version = "0.1.0a24"', pyproject_source)
+        self.assertIn(
+            "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
+            generator_source,
+        )
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""

@@ -11,10 +11,13 @@
 - The supported local brand filenames include `icon.png`, `logo.png`,
   `dark_icon.png`, `dark_logo.png`, and `@2x` variants. Local brand images take
   precedence over the brands CDN in Home Assistant 2026.3 and newer.
-- The RCCL HAR did not expose a clean first-party logo asset; it mostly exposed
-  page art and compiled JavaScript. This repo now generates local `icon.png` and
-  `logo.png` with `scripts/generate_brand_assets.py` and stores them under
-  `custom_components/rccl/brand/`.
+- The initial RCCL HAR did not expose a clean first-party logo asset; it mostly
+  exposed page art and compiled JavaScript. The user later supplied the
+  first-party Royal Caribbean SVG at
+  `https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg`.
+- This repo stores that SVG as `custom_components/rccl/brand/logo.svg` and
+  generates local `icon.png` and `logo.png` from it with
+  `scripts/generate_brand_assets.py`.
 
 ## Filter Control Notes
 

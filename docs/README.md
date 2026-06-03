@@ -116,3 +116,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the focused-filter render deferral fix.
 - [publishing/alpha-23-release-notes.md](publishing/alpha-23-release-notes.md)
   describes local brand assets and multi-select Club Royale filters.
+- [publishing/alpha-24-release-notes.md](publishing/alpha-24-release-notes.md)
+  describes replacing the brand assets with the supplied Royal Caribbean SVG.
