@@ -56,6 +56,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   records the Club Royale card filter controls and field mappings.
 - [research/2026-06-02-club-royale-dropdown-rerender.md](research/2026-06-02-club-royale-dropdown-rerender.md)
   records the fix for dropdowns closing on unchanged Home Assistant updates.
+- [research/2026-06-03-hacs-brand-assets-and-filter-controls.md](research/2026-06-03-hacs-brand-assets-and-filter-controls.md)
+  records HACS/Home Assistant brand asset requirements and the multi-select
+  Club Royale filter behavior.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -111,3 +114,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the Club Royale dropdown re-render fix.
 - [publishing/alpha-22-release-notes.md](publishing/alpha-22-release-notes.md)
   describes the focused-filter render deferral fix.
+- [publishing/alpha-23-release-notes.md](publishing/alpha-23-release-notes.md)
+  describes local brand assets and multi-select Club Royale filters.

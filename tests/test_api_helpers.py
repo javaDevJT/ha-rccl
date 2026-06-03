@@ -689,10 +689,16 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_filteredSailings", card_source)
         self.assertIn("_filterOptions", card_source)
         self.assertIn("_filterBar", card_source)
-        self.assertIn("_filterSelect", card_source)
+        self.assertIn("_filterMenu", card_source)
         self.assertIn("_filterValue", card_source)
         self.assertIn("_setFilter", card_source)
+        self.assertIn("_setFilterItem", card_source)
+        self.assertIn("_selectAllFilterOptions", card_source)
+        self.assertIn("_deselectAllFilterOptions", card_source)
         self.assertIn("_resetFilters", card_source)
+        self.assertIn("_filterSummary", card_source)
+        self.assertIn("_filterSelection", card_source)
+        self.assertIn("_normalizeFilterState", card_source)
         self.assertIn("_applyEntitySailings", card_source)
         self.assertIn("_sailingsSignature", card_source)
         self.assertIn("_renderOrDefer", card_source)
@@ -700,6 +706,15 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_flushDeferredRender", card_source)
         self.assertIn("_pendingRender", card_source)
         self.assertIn("data-filter-key", card_source)
+        self.assertIn("data-filter-value", card_source)
+        self.assertIn("data-filter-bulk", card_source)
+        self.assertIn("data-filter-open", card_source)
+        self.assertIn('type="checkbox"', card_source)
+        self.assertIn("Select all", card_source)
+        self.assertIn("Deselect all", card_source)
+        self.assertIn("Reset filters", card_source)
+        self.assertIn("details", card_source)
+        self.assertIn("summary", card_source)
         self.assertIn("Ship", card_source)
         self.assertIn("Offer type", card_source)
         self.assertIn("Offer", card_source)
@@ -710,6 +725,18 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("offer", card_source)
         self.assertIn("departure", card_source)
         self.assertIn("nights", card_source)
+
+    def test_hacs_brand_assets_are_packaged(self) -> None:
+        """HACS and Home Assistant should have local brand assets to display."""
+
+        brand_dir = ROOT / "custom_components" / "rccl" / "brand"
+        manifest_source = (ROOT / "custom_components" / "rccl" / "manifest.json").read_text()
+        pyproject_source = (ROOT / "pyproject.toml").read_text()
+
+        self.assertTrue((brand_dir / "icon.png").is_file())
+        self.assertTrue((brand_dir / "logo.png").is_file())
+        self.assertIn('"version": "0.1.0-alpha.23"', manifest_source)
+        self.assertIn('version = "0.1.0a23"', pyproject_source)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""

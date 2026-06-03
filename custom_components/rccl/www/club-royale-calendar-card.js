@@ -32,6 +32,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._filters = {};
     this._sailingsDataSignature = "";
     this._pendingRender = false;
+    this._openFilterKey = undefined;
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -206,7 +207,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
         }
 
         button,
-        select {
+        summary {
           border: 1px solid var(--divider-color);
           border-radius: 8px;
           background: var(--card-background-color);
@@ -220,16 +221,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           cursor: pointer;
         }
 
-        select {
-          box-sizing: border-box;
-          width: 100%;
-          min-height: 34px;
-          padding: 0 26px 0 9px;
-          font: inherit;
-        }
-
         button:focus-visible,
-        select:focus-visible,
+        summary:focus-visible,
+        input:focus-visible,
         .sailing-bar:focus-visible {
           outline: 2px solid var(--primary-color);
           outline-offset: 2px;
@@ -243,16 +237,117 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           margin-bottom: 12px;
         }
 
-        .filter {
+        .filter-menu {
           min-width: 0;
+          position: relative;
         }
 
-        .filter-label {
-          display: block;
-          margin-bottom: 3px;
+        .filter-summary-label {
           color: var(--secondary-text-color);
           font-size: 11px;
           font-weight: 650;
+          line-height: 1;
+        }
+
+        .filter-summary {
+          box-sizing: border-box;
+          display: flex;
+          position: relative;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 3px;
+          min-height: 42px;
+          padding: 6px 22px 6px 9px;
+          cursor: pointer;
+          list-style: none;
+        }
+
+        .filter-summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .filter-summary-value {
+          min-width: 0;
+          width: 100%;
+          overflow: hidden;
+          text-align: left;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .filter-summary::after {
+          content: "v";
+          color: var(--secondary-text-color);
+          font-size: 10px;
+          position: absolute;
+          right: 9px;
+          top: 50%;
+          transform: translateY(-50%);
+        }
+
+        .filter-menu[open] .filter-summary::after {
+          content: "^";
+        }
+
+        .filter-panel {
+          position: absolute;
+          z-index: 5;
+          inset-inline: 0;
+          top: calc(100% + 4px);
+          box-sizing: border-box;
+          max-height: 240px;
+          overflow: auto;
+          padding: 8px;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--card-background-color);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+        }
+
+        .filter-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 6px;
+          margin-bottom: 6px;
+        }
+
+        .filter-actions button {
+          width: 100%;
+          min-width: 0;
+          padding: 0 8px;
+          font-size: 12px;
+        }
+
+        .filter-options {
+          display: grid;
+          gap: 4px;
+        }
+
+        .filter-option {
+          display: flex;
+          align-items: flex-start;
+          gap: 7px;
+          min-width: 0;
+          padding: 4px 2px;
+          font-size: 12px;
+          line-height: 1.25;
+        }
+
+        .filter-option input {
+          flex: 0 0 auto;
+          margin: 1px 0 0;
+        }
+
+        .filter-option span {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .filter-empty {
+          color: var(--secondary-text-color);
+          font-size: 12px;
+          padding: 4px 2px;
         }
 
         .filter-reset {
@@ -400,6 +495,10 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
             grid-column: 1 / -1;
           }
 
+          .filter-panel {
+            max-height: 220px;
+          }
+
           .calendar-shell {
             max-height: 58vh;
             min-height: 300px;
@@ -473,34 +572,70 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
   }
 
   _filterBar() {
-    const filters = FILTER_DEFINITIONS.map((definition) => this._filterSelect(definition)).join("");
+    const filters = FILTER_DEFINITIONS.map((definition) => this._filterMenu(definition)).join("");
     const resetDisabled = this._hasActiveFilters() ? "" : " disabled";
     return `
       <div class="filters" aria-label="Club Royale sailing filters">
         ${filters}
-        <button type="button" class="filter-reset" data-action="reset-filters"${resetDisabled}>Reset</button>
+        <button type="button" class="filter-reset" data-action="reset-filters"${resetDisabled}>Reset filters</button>
       </div>
     `;
   }
 
-  _filterSelect(definition) {
+  _filterMenu(definition) {
     const options = this._filterOptions(definition.key);
-    const selectedValue = this._filters[definition.key] || "";
+    const selected = this._filterSelection(definition.key);
+    const isOpen = this._openFilterKey === definition.key ? " open" : "";
+    const checked = (option) => selected === undefined || selected.has(option.value);
     return `
-      <label class="filter">
-        <span class="filter-label">${escapeHtml(definition.label)}</span>
-        <select data-filter-key="${escapeHtml(definition.key)}" aria-label="${escapeHtml(definition.label)} filter">
-          <option value="">${escapeHtml(definition.all)}</option>
-          ${options
-            .map(
-              (option) => `
-                <option value="${escapeHtml(option.value)}"${option.value === selectedValue ? " selected" : ""}>${escapeHtml(option.label)}</option>
-              `,
-            )
-            .join("")}
-        </select>
-      </label>
+      <details class="filter-menu" data-filter-open data-filter-key="${escapeHtml(definition.key)}"${isOpen}>
+        <summary class="filter-summary" aria-label="${escapeHtml(definition.label)} filter">
+          <span class="filter-summary-label">${escapeHtml(definition.label)}</span>
+          <span class="filter-summary-value">${escapeHtml(this._filterSummary(definition, options))}</span>
+        </summary>
+        <div class="filter-panel" role="group" aria-label="${escapeHtml(definition.label)} filter values">
+          <div class="filter-actions">
+            <button type="button" data-filter-bulk="select-all" data-filter-key="${escapeHtml(definition.key)}">Select all</button>
+            <button type="button" data-filter-bulk="deselect-all" data-filter-key="${escapeHtml(definition.key)}">Deselect all</button>
+          </div>
+          <div class="filter-options">
+            ${
+              options.length
+                ? options
+                    .map(
+                      (option) => `
+                        <label class="filter-option">
+                          <input
+                            type="checkbox"
+                            data-filter-key="${escapeHtml(definition.key)}"
+                            data-filter-value="${escapeHtml(option.value)}"
+                            ${checked(option) ? "checked" : ""}
+                          >
+                          <span>${escapeHtml(option.label)}</span>
+                        </label>
+                      `,
+                    )
+                    .join("")
+                : `<div class="filter-empty">No values available</div>`
+            }
+          </div>
+        </div>
+      </details>
     `;
+  }
+
+  _filterSummary(definition, options) {
+    const selected = this._filterSelection(definition.key);
+    if (selected === undefined) {
+      return definition.all;
+    }
+    if (!selected.size) {
+      return "None selected";
+    }
+    if (selected.size === 1) {
+      return options.find((option) => selected.has(option.value))?.label || "1 selected";
+    }
+    return `${selected.size} selected`;
   }
 
   _dayCell(day) {
@@ -610,10 +745,18 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
   _filteredSailings() {
     return this._sailings.filter((sailing) =>
       FILTER_DEFINITIONS.every((definition) => {
-        const selected = this._filters[definition.key];
-        return !selected || this._filterValue(sailing, definition.key) === selected;
+        const selected = this._filterSelection(definition.key);
+        return selected === undefined || selected.has(this._filterValue(sailing, definition.key));
       }),
     );
+  }
+
+  _filterSelection(key) {
+    if (!Object.prototype.hasOwnProperty.call(this._filters, key)) {
+      return undefined;
+    }
+    const values = Array.isArray(this._filters[key]) ? this._filters[key] : [this._filters[key]];
+    return new Set(values.map((value) => String(value)));
   }
 
   _filterOptions(key) {
@@ -655,7 +798,27 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
   }
 
   _hasActiveFilters() {
-    return FILTER_DEFINITIONS.some((definition) => Boolean(this._filters[definition.key]));
+    return FILTER_DEFINITIONS.some((definition) =>
+      Object.prototype.hasOwnProperty.call(this._filters, definition.key)
+    );
+  }
+
+  _normalizeFilterState() {
+    const nextFilters = {};
+    for (const definition of FILTER_DEFINITIONS) {
+      if (!Object.prototype.hasOwnProperty.call(this._filters, definition.key)) {
+        continue;
+      }
+      const available = new Set(this._filterOptions(definition.key).map((option) => option.value));
+      const selected = this._filterSelection(definition.key);
+      const values = Array.from(selected || []).filter((value) => available.has(value));
+      if (values.length && values.length < available.size) {
+        nextFilters[definition.key] = values;
+      } else if (!values.length && selected?.size === 0) {
+        nextFilters[definition.key] = [];
+      }
+    }
+    this._filters = nextFilters;
   }
 
   _segments(sailings, gridStart, weekCount) {
@@ -805,10 +968,58 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       return;
     }
     if (value) {
-      this._filters[key] = value;
+      this._filters[key] = [String(value)];
     } else {
       delete this._filters[key];
     }
+    this._afterFilterChanged();
+  }
+
+  _setFilterItem(key, value, checked) {
+    const options = this._filterOptions(key).map((option) => option.value);
+    if (!options.length) {
+      return;
+    }
+    const available = new Set(options);
+    if (!available.has(value)) {
+      return;
+    }
+    const current = this._filterSelection(key);
+    const selected = current === undefined ? new Set(options) : new Set(current);
+    if (checked) {
+      selected.add(value);
+    } else {
+      selected.delete(value);
+    }
+
+    if (selected.size === options.length) {
+      delete this._filters[key];
+    } else {
+      this._filters[key] = options.filter((option) => selected.has(option));
+    }
+    this._openFilterKey = key;
+    this._afterFilterChanged();
+  }
+
+  _selectAllFilterOptions(key) {
+    if (!FILTER_DEFINITIONS.some((definition) => definition.key === key)) {
+      return;
+    }
+    delete this._filters[key];
+    this._openFilterKey = key;
+    this._afterFilterChanged();
+  }
+
+  _deselectAllFilterOptions(key) {
+    if (!FILTER_DEFINITIONS.some((definition) => definition.key === key)) {
+      return;
+    }
+    this._filters[key] = [];
+    this._openFilterKey = key;
+    this._afterFilterChanged();
+  }
+
+  _afterFilterChanged() {
     this._resetCalendarScrollOnRender = true;
     const filteredSailings = this._filteredSailings();
     if (!filteredSailings.some((sailing) => String(sailing.id) === String(this._selectedId))) {
@@ -822,6 +1033,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       return;
     }
     this._filters = {};
+    this._openFilterKey = undefined;
     this._resetCalendarScrollOnRender = true;
     this._selectedId = this._sailings[0]?.id;
     this._render();
@@ -837,7 +1049,11 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
   _hasFocusedFilterControl() {
     const active = this.shadowRoot?.activeElement;
-    return Boolean(active?.dataset?.filterKey || active?.matches?.("[data-filter-key]"));
+    return Boolean(
+      active?.dataset?.filterKey ||
+        active?.matches?.("[data-filter-key]") ||
+        this.shadowRoot?.querySelector("[data-filter-open][open]")
+    );
   }
 
   _flushDeferredRender() {
@@ -899,16 +1115,47 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll("[data-filter-key]").forEach((select) => {
-      select.addEventListener("change", () => {
-        this._setFilter(select.dataset.filterKey, select.value);
-      });
-      select.addEventListener("blur", () => {
+    this.shadowRoot.querySelectorAll("[data-filter-open]").forEach((details) => {
+      details.addEventListener("toggle", () => {
+        if (details.open) {
+          this._openFilterKey = details.dataset.filterKey;
+          this.shadowRoot.querySelectorAll("[data-filter-open]").forEach((other) => {
+            if (other !== details) {
+              other.open = false;
+            }
+          });
+          return;
+        }
+        if (this._openFilterKey === details.dataset.filterKey) {
+          this._openFilterKey = undefined;
+        }
         if (window.requestAnimationFrame) {
           window.requestAnimationFrame(() => this._flushDeferredRender());
           return;
         }
         window.setTimeout(() => this._flushDeferredRender(), 0);
+      });
+    });
+
+    this.shadowRoot.querySelectorAll("[data-filter-value]").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        this._setFilterItem(
+          checkbox.dataset.filterKey,
+          checkbox.dataset.filterValue,
+          checkbox.checked,
+        );
+      });
+    });
+
+    this.shadowRoot.querySelectorAll("[data-filter-bulk]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.filterBulk === "select-all") {
+          this._selectAllFilterOptions(button.dataset.filterKey);
+          return;
+        }
+        if (button.dataset.filterBulk === "deselect-all") {
+          this._deselectAllFilterOptions(button.dataset.filterKey);
+        }
       });
     });
 
@@ -923,6 +1170,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
   _applySailings(sailings) {
     this._sailings = sailings;
     this._sailingsDataSignature = this._sailingsSignature(sailings);
+    this._normalizeFilterState();
     if (!this._selectedId || !this._sailings.some((item) => String(item.id) === String(this._selectedId))) {
       this._selectedId = this._sailings[0]?.id;
     }
