@@ -9,8 +9,12 @@ GitHub release, not just a tag, must be created after those actions pass.
 
 The same checklist also verifies that the repository has a description, issues
 enabled, topics defined, a valid manifest, a valid `hacs.json`, at least one
-release, sorted JSON in the default-list PR, and Home Assistant Brands coverage
-for integrations.
+release, and sorted JSON in the default-list PR.
+
+Home Assistant Brands no longer accepts new custom-integration asset PRs. PR
+home-assistant/brands#10441 was auto-closed by the repository workflow with the
+instruction that custom integrations should provide local brand assets directly
+starting with Home Assistant 2026.3.0.
 
 ## Repository State
 
@@ -28,3 +32,5 @@ and before `JayBlackedOut/hass-nhlapi`.
 - Added an MIT license.
 - Promoted package metadata from alpha prerelease numbering to `0.1.0` so the
   next release can be a normal release for default-repository review.
+- Kept the local `custom_components/rccl/brand/` assets as the required custom
+  integration brand path.
