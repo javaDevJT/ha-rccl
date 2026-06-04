@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import json
 import logging
+import re
 import time
 from typing import Any
 from http.cookiejar import CookieJar as UrllibCookieJar
@@ -1156,7 +1157,12 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
     offer_type_name = (
         offer_type.get("name") if isinstance(offer_type, dict) else offer_type
     )
-    occupancy_key, occupancy_label = _offer_occupancy(campaign_offer.get("description"))
+    occupancy_key, occupancy_label = _offer_occupancy(
+        campaign_offer.get("description"),
+        offer_type_name,
+        offer_name,
+        offer.get("campaignName"),
+    )
 
     rows = []
     sailings = campaign_offer.get("sailings", [])
@@ -1254,13 +1260,17 @@ def _cabin_guarantee(sailing: JsonObject, room_types: list[JsonObject]) -> str |
     return f"{label} Guarantee" if sailing.get("isGTY") is True else label
 
 
-def _offer_occupancy(description: Any) -> tuple[str | None, str | None]:
-    """Infer offer occupancy from RCCL's offer description."""
+def _offer_occupancy(*values: Any) -> tuple[str | None, str | None]:
+    """Infer offer occupancy from RCCL's offer labels."""
 
-    text = str(description or "").lower()
-    if "for two" in text or "for 2" in text:
+    text = " ".join(str(value or "") for value in values).lower()
+    if re.search(r"\bfor\s+(?:two|2)\s+(?:guest|passenger)s?\b", text):
         return "two_passengers", "Two passengers"
-    if "for one" in text or "for 1" in text:
+    if re.search(r"\bfor\s+(?:one|1)\s+(?:guest|passenger)s?\b", text):
+        return "one_passenger", "One passenger"
+    if re.search(r"\bfor\s+(?:two|2)\b", text):
+        return "two_passengers", "Two passengers"
+    if re.search(r"\bfor\s+(?:one|1)\b", text):
         return "one_passenger", "One passenger"
     return None, None
 

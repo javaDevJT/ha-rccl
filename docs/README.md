@@ -62,6 +62,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [research/2026-06-03-club-royale-filter-panel-scroll.md](research/2026-06-03-club-royale-filter-panel-scroll.md)
   records the fix for filter dropdowns jumping to the top after checkbox
   changes.
+- [research/2026-06-04-club-royale-offer-guest-count.md](research/2026-06-04-club-royale-offer-guest-count.md)
+  records the fix for detecting one-guest versus two-guest Club Royale offer
+  labels.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -123,3 +126,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes replacing the brand assets with the supplied Royal Caribbean SVG.
 - [publishing/alpha-25-release-notes.md](publishing/alpha-25-release-notes.md)
   describes preserving Club Royale filter dropdown scroll position.
+- [publishing/alpha-26-release-notes.md](publishing/alpha-26-release-notes.md)
+  describes the Club Royale one-guest versus two-guest offer detection fix.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import copy
 from datetime import date
 import importlib
 import json
@@ -300,6 +301,29 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual(result[0]["offer_type"], "Complimentary")
         self.assertNotIn("booking_id", result[0])
         self.assertNotIn("passengers", result[0])
+
+    def test_club_royale_offer_type_name_sets_guest_count(self) -> None:
+        """Cruise Fare For N Guest offer-type names should drive occupancy."""
+
+        data = copy.deepcopy(SAMPLE_CLUB_ROYALE_DATA)
+        offers = data["club_royale"]["offer_details"][0]["offers"]
+        first_offer = offers[0]
+        first_offer["campaignOffer"]["description"] = "Casino offer"
+        first_offer["campaignOffer"]["offerType"]["name"] = "Cruise Fare For 1 Guest"
+        second_offer = copy.deepcopy(first_offer)
+        second_offer["campaignOffer"]["offerCode"] = "26SUM206"
+        second_offer["campaignOffer"]["offerType"]["name"] = "Cruise Fare For 2 Guests"
+        second_offer["campaignOffer"]["sailings"][0]["id"] = "sailing-2"
+        second_offer["campaignOffer"]["sailings"][0]["sailDate"] = "2026-07-03"
+        offers.append(second_offer)
+
+        result = api.club_royale_sailings(data)
+
+        by_id = {sailing["id"]: sailing for sailing in result}
+        self.assertEqual(by_id["sailing-1"]["offer_occupancy"], "one_passenger")
+        self.assertEqual(by_id["sailing-1"]["offer_occupancy_label"], "One passenger")
+        self.assertEqual(by_id["sailing-2"]["offer_occupancy"], "two_passengers")
+        self.assertEqual(by_id["sailing-2"]["offer_occupancy_label"], "Two passengers")
 
 
 class LoginTest(unittest.IsolatedAsyncioTestCase):
@@ -741,8 +765,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.svg").is_file())
         self.assertTrue((brand_dir / "icon.png").is_file())
         self.assertTrue((brand_dir / "logo.png").is_file())
-        self.assertIn('"version": "0.1.0-alpha.25"', manifest_source)
-        self.assertIn('version = "0.1.0a25"', pyproject_source)
+        self.assertIn('"version": "0.1.0-alpha.26"', manifest_source)
+        self.assertIn('version = "0.1.0a26"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
