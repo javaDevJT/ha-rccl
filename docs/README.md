@@ -59,6 +59,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [research/2026-06-03-hacs-brand-assets-and-filter-controls.md](research/2026-06-03-hacs-brand-assets-and-filter-controls.md)
   records HACS/Home Assistant brand asset requirements and the multi-select
   Club Royale filter behavior.
+- [research/2026-06-03-club-royale-filter-panel-scroll.md](research/2026-06-03-club-royale-filter-panel-scroll.md)
+  records the fix for filter dropdowns jumping to the top after checkbox
+  changes.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -118,3 +121,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes local brand assets and multi-select Club Royale filters.
 - [publishing/alpha-24-release-notes.md](publishing/alpha-24-release-notes.md)
   describes replacing the brand assets with the supplied Royal Caribbean SVG.
+- [publishing/alpha-25-release-notes.md](publishing/alpha-25-release-notes.md)
+  describes preserving Club Royale filter dropdown scroll position.

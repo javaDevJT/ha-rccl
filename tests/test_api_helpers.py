@@ -699,6 +699,9 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_filterSummary", card_source)
         self.assertIn("_filterSelection", card_source)
         self.assertIn("_normalizeFilterState", card_source)
+        self.assertIn("_filterPanelScrollTop", card_source)
+        self.assertIn("_currentFilterPanelScrollTop", card_source)
+        self.assertIn("_restoreFilterPanelScroll", card_source)
         self.assertIn("_applyEntitySailings", card_source)
         self.assertIn("_sailingsSignature", card_source)
         self.assertIn("_renderOrDefer", card_source)
@@ -709,6 +712,7 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("data-filter-value", card_source)
         self.assertIn("data-filter-bulk", card_source)
         self.assertIn("data-filter-open", card_source)
+        self.assertIn("data-filter-panel", card_source)
         self.assertIn('type="checkbox"', card_source)
         self.assertIn("Select all", card_source)
         self.assertIn("Deselect all", card_source)
@@ -737,8 +741,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.svg").is_file())
         self.assertTrue((brand_dir / "icon.png").is_file())
         self.assertTrue((brand_dir / "logo.png").is_file())
-        self.assertIn('"version": "0.1.0-alpha.24"', manifest_source)
-        self.assertIn('version = "0.1.0a24"', pyproject_source)
+        self.assertIn('"version": "0.1.0-alpha.25"', manifest_source)
+        self.assertIn('version = "0.1.0a25"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,

@@ -33,6 +33,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._sailingsDataSignature = "";
     this._pendingRender = false;
     this._openFilterKey = undefined;
+    this._filterPanelScrollTop = {};
     const now = new Date();
     this._month = new Date(now.getFullYear(), now.getMonth(), 1);
   }
@@ -139,6 +140,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const calendarScrollTop = this._resetCalendarScrollOnRender
       ? 0
       : this._currentCalendarScrollTop();
+    const filterPanelKey = this._openFilterKey;
+    const filterPanelScrollTop = this._currentFilterPanelScrollTop(filterPanelKey);
     this._resetCalendarScrollOnRender = false;
     const grid = this._calendarModel();
     const filteredSailings = this._filteredSailings();
@@ -540,6 +543,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     `;
     this._attachHandlers();
     this._restoreCalendarScroll(calendarScrollTop);
+    this._restoreFilterPanelScroll(filterPanelKey, filterPanelScrollTop);
   }
 
   _body(grid, visibleSailings, segments, selected, weekLaneCounts, calendarViewportHeight) {
@@ -593,7 +597,7 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
           <span class="filter-summary-label">${escapeHtml(definition.label)}</span>
           <span class="filter-summary-value">${escapeHtml(this._filterSummary(definition, options))}</span>
         </summary>
-        <div class="filter-panel" role="group" aria-label="${escapeHtml(definition.label)} filter values">
+        <div class="filter-panel" data-filter-panel="${escapeHtml(definition.key)}" role="group" aria-label="${escapeHtml(definition.label)} filter values">
           <div class="filter-actions">
             <button type="button" data-filter-bulk="select-all" data-filter-key="${escapeHtml(definition.key)}">Select all</button>
             <button type="button" data-filter-bulk="deselect-all" data-filter-key="${escapeHtml(definition.key)}">Deselect all</button>
@@ -955,6 +959,51 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     return `rccl:club-royale-calendar:${scope}:${month}`;
   }
 
+  _filterPanelElement(key = this._openFilterKey) {
+    if (!key) {
+      return undefined;
+    }
+    return Array.from(this.shadowRoot?.querySelectorAll("[data-filter-panel]") || []).find(
+      (panel) => panel.dataset.filterPanel === key,
+    );
+  }
+
+  _currentFilterPanelScrollTop(key = this._openFilterKey) {
+    const panel = this._filterPanelElement(key);
+    if (panel) {
+      return panel.scrollTop;
+    }
+    return this._filterPanelScrollTop[key] || 0;
+  }
+
+  _saveFilterPanelScrollTop(key, scrollTop) {
+    if (!key) {
+      return;
+    }
+    this._filterPanelScrollTop[key] = Math.max(0, Number(scrollTop) || 0);
+  }
+
+  _restoreFilterPanelScroll(key = this._openFilterKey, scrollTop = this._currentFilterPanelScrollTop(key)) {
+    const panel = this._filterPanelElement(key);
+    if (!panel) {
+      return;
+    }
+    const targetScrollTop = Math.max(0, Number(scrollTop) || 0);
+    this._saveFilterPanelScrollTop(key, targetScrollTop);
+
+    const applyScrollTop = () => {
+      panel.scrollTop = targetScrollTop;
+      this._saveFilterPanelScrollTop(key, panel.scrollTop);
+    };
+    applyScrollTop();
+    panel.addEventListener(
+      "scroll",
+      () => this._saveFilterPanelScrollTop(key, panel.scrollTop),
+      { passive: true },
+    );
+    window.requestAnimationFrame?.(applyScrollTop);
+  }
+
   _selectSailing(sailingId) {
     if (!sailingId || sailingId === this._selectedId) {
       return;
@@ -1117,16 +1166,23 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
     this.shadowRoot.querySelectorAll("[data-filter-open]").forEach((details) => {
       details.addEventListener("toggle", () => {
+        const filterKey = details.dataset.filterKey;
         if (details.open) {
-          this._openFilterKey = details.dataset.filterKey;
+          this._openFilterKey = filterKey;
           this.shadowRoot.querySelectorAll("[data-filter-open]").forEach((other) => {
             if (other !== details) {
+              this._saveFilterPanelScrollTop(
+                other.dataset.filterKey,
+                this._currentFilterPanelScrollTop(other.dataset.filterKey),
+              );
               other.open = false;
             }
           });
+          this._restoreFilterPanelScroll(filterKey);
           return;
         }
-        if (this._openFilterKey === details.dataset.filterKey) {
+        this._saveFilterPanelScrollTop(filterKey, this._currentFilterPanelScrollTop(filterKey));
+        if (this._openFilterKey === filterKey) {
           this._openFilterKey = undefined;
         }
         if (window.requestAnimationFrame) {
