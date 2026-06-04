@@ -50,6 +50,10 @@ _USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
 )
 _CLUB_ROYALE_APPROVED_AGENCY_IDS = ["109638", "388809"]
+_OFFER_LABEL_KEY_RE = re.compile(
+    r"(offer|fare|rate|price|pricing|promo|promotion|discount|guest|passenger|comp)",
+    re.IGNORECASE,
+)
 
 JsonObject = dict[str, Any]
 
@@ -1157,7 +1161,7 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
     offer_type_name = (
         offer_type.get("name") if isinstance(offer_type, dict) else offer_type
     )
-    occupancy_key, occupancy_label = _offer_occupancy(
+    fallback_occupancy_key, fallback_occupancy_label = _offer_occupancy(
         campaign_offer.get("description"),
         offer_type_name,
         offer_name,
@@ -1180,6 +1184,16 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
         ship_name = str(sailing.get("shipName") or sailing.get("shipCode") or "")
         itinerary_name = _sailing_name(sailing)
         room_types = _room_types(sailing)
+        sailing_offer_labels = _sailing_offer_labels(sailing)
+        occupancy_key, occupancy_label = _offer_occupancy(*sailing_offer_labels)
+        if occupancy_key is None:
+            occupancy_key = fallback_occupancy_key
+            occupancy_label = fallback_occupancy_label
+        offer_type_label = _sailing_offer_type(
+            sailing,
+            sailing_offer_labels,
+            offer_type_name,
+        )
         row = {
             "id": str(
                 sailing.get("id")
@@ -1201,9 +1215,12 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
             "cabin_guarantee": _cabin_guarantee(sailing, room_types),
             "offer_name": offer_name,
             "offer_code": campaign_offer.get("offerCode"),
-            "offer_type": offer_type_name,
+            "offer_type": offer_type_label,
             "offer_occupancy": occupancy_key,
             "offer_occupancy_label": occupancy_label,
+            "is_complimentary": (
+                sailing.get("isCOMP") if isinstance(sailing.get("isCOMP"), bool) else None
+            ),
             "reserve_by_date": _date_string(campaign_offer.get("reserveByDate")),
             "sail_by_date": _date_string(campaign_offer.get("sailByDate")),
             "calendar_title": _calendar_title(itinerary_name, ship_name),
@@ -1258,6 +1275,69 @@ def _cabin_guarantee(sailing: JsonObject, room_types: list[JsonObject]) -> str |
         return "Guarantee" if sailing.get("isGTY") is True else None
     label = " / ".join(names)
     return f"{label} Guarantee" if sailing.get("isGTY") is True else label
+
+
+def _sailing_offer_labels(sailing: JsonObject) -> list[str]:
+    """Return fare and offer labels attached to one sailing row."""
+
+    labels: list[str] = []
+    for key, value in sailing.items():
+        if _OFFER_LABEL_KEY_RE.search(str(key)):
+            labels.extend(_offer_label_values(value))
+    return labels
+
+
+def _offer_label_values(value: Any) -> list[str]:
+    """Flatten human-readable labels from offer/fare objects."""
+
+    if isinstance(value, dict):
+        labels: list[str] = []
+        for key, item in value.items():
+            key_name = str(key)
+            key_lower = key_name.lower().replace("_", "")
+            if key_lower in {
+                "name",
+                "description",
+                "label",
+                "title",
+                "displayname",
+                "displaytext",
+                "code",
+            }:
+                labels.extend(_offer_label_values(item))
+                continue
+            if _OFFER_LABEL_KEY_RE.search(key_name):
+                labels.extend(_offer_label_values(item))
+        return labels
+    if isinstance(value, list):
+        labels: list[str] = []
+        for item in value:
+            labels.extend(_offer_label_values(item))
+        return labels
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (int, float)):
+        return [str(value)]
+    return []
+
+
+def _sailing_offer_type(
+    sailing: JsonObject,
+    sailing_labels: list[str],
+    fallback: Any,
+) -> str | None:
+    """Return complimentary/reduced-fare terms for a sailing."""
+
+    label_text = re.sub(r"[_/-]+", " ", " ".join(sailing_labels).lower())
+    if sailing.get("isCOMP") is False:
+        return "Reduced fare"
+    if re.search(r"\b(reduced|discounted|discount)\b", label_text):
+        return "Reduced fare"
+    if re.search(r"\b(comp|complimentary|free)\b", label_text):
+        return "Complimentary"
+    if sailing.get("isCOMP") is True:
+        return "Complimentary"
+    return str(fallback) if fallback else None
 
 
 def _offer_occupancy(*values: Any) -> tuple[str | None, str | None]:

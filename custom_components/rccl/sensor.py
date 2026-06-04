@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -125,8 +126,14 @@ def _async_setup_club_royale_sensors(
     known_sailing_ids: set[str] = set()
 
     def add_sailing_entities() -> None:
+        current_sailings = _club_royale_sailings(coordinator.data or {})
+        current_sailing_ids = {_sailing_id(sailing) for sailing in current_sailings}
+        if isinstance(coordinator.data, dict) and "sailings" in coordinator.data:
+            _remove_stale_club_royale_entities(hass, entry, current_sailing_ids)
+            known_sailing_ids.intersection_update(current_sailing_ids)
+
         new_entities: list[ClubRoyaleSailingSensor] = []
-        for sailing in _club_royale_sailings(coordinator.data or {}):
+        for sailing in current_sailings:
             sailing_id = _sailing_id(sailing)
             if sailing_id in known_sailing_ids:
                 continue
@@ -239,9 +246,7 @@ class ClubRoyaleSailingSensor(
         self._entry = entry
         self._sailing_id = _sailing_id(sailing)
         self._attr_name = sailing.get("calendar_title") or "Club Royale sailing"
-        self._attr_unique_id = (
-            f"{entry.entry_id}_club_royale_sailing_{_safe_id(self._sailing_id)}"
-        )
+        self._attr_unique_id = _club_royale_sailing_unique_id(entry, self._sailing_id)
         self._attr_device_info = _club_royale_device_info(entry)
 
     @property
@@ -278,6 +283,30 @@ def _club_royale_sailings(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [sailing for sailing in sailings if isinstance(sailing, dict)]
 
 
+def _remove_stale_club_royale_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    current_sailing_ids: set[str],
+) -> None:
+    """Remove dynamic sailing sensors that are no longer in the latest data."""
+
+    registry = er.async_get(hass)
+    current_unique_ids = {
+        _club_royale_sailing_unique_id(entry, sailing_id)
+        for sailing_id in current_sailing_ids
+    }
+    prefix = f"{entry.entry_id}_club_royale_sailing_"
+    for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if (
+            not registry_entry.unique_id
+            or not registry_entry.unique_id.startswith(prefix)
+        ):
+            continue
+        if registry_entry.unique_id in current_unique_ids:
+            continue
+        registry.async_remove(registry_entry.entity_id)
+
+
 def _sailing_id(sailing: dict[str, Any]) -> str:
     """Return a stable id for a Club Royale sailing."""
 
@@ -285,6 +314,12 @@ def _sailing_id(sailing: dict[str, Any]) -> str:
         sailing.get("id")
         or f"{sailing.get('offer_code')}:{sailing.get('ship_code')}:{sailing.get('sail_date')}"
     )
+
+
+def _club_royale_sailing_unique_id(entry: ConfigEntry, sailing_id: str) -> str:
+    """Return the Home Assistant unique id for one sailing sensor."""
+
+    return f"{entry.entry_id}_club_royale_sailing_{_safe_id(sailing_id)}"
 
 
 def _safe_id(value: str) -> str:

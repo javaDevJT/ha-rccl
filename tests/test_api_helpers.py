@@ -325,6 +325,31 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual(by_id["sailing-2"]["offer_occupancy"], "two_passengers")
         self.assertEqual(by_id["sailing-2"]["offer_occupancy_label"], "Two passengers")
 
+    def test_club_royale_sailing_level_offer_terms_override_campaign(self) -> None:
+        """Per-sailing fare and guest labels should beat campaign defaults."""
+
+        data = copy.deepcopy(SAMPLE_CLUB_ROYALE_DATA)
+        campaign_offer = data["club_royale"]["offer_details"][0]["offers"][0]["campaignOffer"]
+        campaign_offer["description"] = "Complimentary cruise fare for two guests"
+        sailings = campaign_offer["sailings"]
+        sailings[0]["offerType"] = {"name": "Cruise Fare For 1 Guest"}
+        second_sailing = copy.deepcopy(sailings[0])
+        second_sailing["id"] = "sailing-2"
+        second_sailing["sailDate"] = "2026-07-03"
+        second_sailing["isCOMP"] = False
+        second_sailing["fareType"] = {"name": "Cruise Fare For 1 Guest"}
+        sailings.append(second_sailing)
+
+        result = api.club_royale_sailings(data)
+
+        by_id = {sailing["id"]: sailing for sailing in result}
+        self.assertEqual(by_id["sailing-1"]["offer_type"], "Complimentary")
+        self.assertEqual(by_id["sailing-1"]["offer_occupancy"], "one_passenger")
+        self.assertEqual(by_id["sailing-1"]["offer_occupancy_label"], "One passenger")
+        self.assertEqual(by_id["sailing-2"]["offer_type"], "Reduced fare")
+        self.assertEqual(by_id["sailing-2"]["offer_occupancy"], "one_passenger")
+        self.assertEqual(by_id["sailing-2"]["offer_occupancy_label"], "One passenger")
+
 
 class LoginTest(unittest.IsolatedAsyncioTestCase):
     """Exercise login parsing without Home Assistant."""
@@ -765,8 +790,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.svg").is_file())
         self.assertTrue((brand_dir / "icon.png").is_file())
         self.assertTrue((brand_dir / "logo.png").is_file())
-        self.assertIn('"version": "0.1.0-alpha.26"', manifest_source)
-        self.assertIn('version = "0.1.0a26"', pyproject_source)
+        self.assertIn('"version": "0.1.0-alpha.27"', manifest_source)
+        self.assertIn('version = "0.1.0a27"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
@@ -834,6 +859,17 @@ class SourceContractTest(unittest.TestCase):
         )[1]
         self.assertIn("client: RCCLClient", club_coordinator)
         self.assertNotIn("async_fetch_club_royale_sailings", club_coordinator)
+
+    def test_club_royale_sailing_entities_are_cleaned_up(self) -> None:
+        """Stale Club Royale sailing entities should be removed automatically."""
+
+        sensor_source = (ROOT / "custom_components" / "rccl" / "sensor.py").read_text()
+
+        self.assertIn("entity_registry", sensor_source)
+        self.assertIn("_remove_stale_club_royale_entities", sensor_source)
+        self.assertIn("async_entries_for_config_entry", sensor_source)
+        self.assertIn("registry.async_remove", sensor_source)
+        self.assertIn("known_sailing_ids.intersection_update", sensor_source)
 
 
 if __name__ == "__main__":
