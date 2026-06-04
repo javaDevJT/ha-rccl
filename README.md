@@ -19,8 +19,9 @@ upgrade, loyalty, and sailing-history endpoints.
 
 ## Installation
 
-1. Add this repository as a HACS custom repository with category
-   `Integration`.
+1. Install `Royal Caribbean` from the HACS integrations catalog. Until this
+   repository is included as a HACS default repository, add it as a HACS custom
+   repository with category `Integration`.
 2. Install `Royal Caribbean`.
 3. Restart Home Assistant.
 4. Go to **Settings > Devices & services > Add integration** and search for
@@ -69,6 +70,8 @@ offer occupancy when RCCL exposes it.
 
 ## Limitations
 
+- This project is not affiliated with, endorsed by, or supported by Royal
+  Caribbean Group.
 - RCCL may change or harden the web login flow. If login starts failing, Home
   Assistant will start a reauthentication flow.
 - Booking IDs and passenger fields may be exposed in Home Assistant attributes

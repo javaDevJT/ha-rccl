@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit and syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run Python tests
+        run: python -m unittest discover -s tests -q
+
+      - name: Compile Python sources
+        run: python -m compileall -q custom_components scripts tests
+
+      - name: Check custom card syntax
+        run: node --check custom_components/rccl/www/club-royale-calendar-card.js
+
+      - name: Validate JSON files
+        run: |
+          python -m json.tool custom_components/rccl/manifest.json >/dev/null
+          python -m json.tool hacs.json >/dev/null

@@ -1,12 +1,14 @@
 {
   "domain": "rccl",
   "name": "Royal Caribbean",
-  "codeowners": [],
+  "codeowners": [
+    "@javaDevJT"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/javaDevJT/ha-rccl",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/javaDevJT/ha-rccl/issues",
   "requirements": [],
-  "version": "0.1.0-alpha.27"
+  "version": "0.1.0"
 }

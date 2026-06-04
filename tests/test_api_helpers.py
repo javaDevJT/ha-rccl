@@ -790,12 +790,30 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.svg").is_file())
         self.assertTrue((brand_dir / "icon.png").is_file())
         self.assertTrue((brand_dir / "logo.png").is_file())
-        self.assertIn('"version": "0.1.0-alpha.27"', manifest_source)
-        self.assertIn('version = "0.1.0a27"', pyproject_source)
+        self.assertIn('"@javaDevJT"', manifest_source)
+        self.assertIn('"version": "0.1.0"', manifest_source)
+        self.assertIn('version = "0.1.0"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
         )
+
+    def test_hacs_default_submission_files_are_present(self) -> None:
+        """Default HACS repositories expect validation workflows and metadata."""
+
+        workflows = ROOT / ".github" / "workflows"
+        license_source = (ROOT / "LICENSE").read_text()
+        codeowners_source = (ROOT / ".github" / "CODEOWNERS").read_text()
+        hacs_workflow = (workflows / "hacs.yml").read_text()
+        hassfest_workflow = (workflows / "hassfest.yml").read_text()
+        tests_workflow = (workflows / "tests.yml").read_text()
+
+        self.assertIn("MIT License", license_source)
+        self.assertIn("@javaDevJT", codeowners_source)
+        self.assertIn("hacs/action@main", hacs_workflow)
+        self.assertIn("category: integration", hacs_workflow)
+        self.assertIn("home-assistant/actions/hassfest@master", hassfest_workflow)
+        self.assertIn("python -m unittest discover -s tests -q", tests_workflow)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""
