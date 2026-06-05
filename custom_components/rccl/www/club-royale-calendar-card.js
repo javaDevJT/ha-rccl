@@ -145,7 +145,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._resetCalendarScrollOnRender = false;
     const grid = this._calendarModel();
     const filteredSailings = this._filteredSailings();
-    const visibleSailings = this._visibleSailings(grid.start, grid.end, filteredSailings);
+    const visibleSailingRows = this._visibleSailings(grid.start, grid.end, filteredSailings);
+    const visibleSailings = this._displaySailings(visibleSailingRows);
     const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
     const weekLaneCounts = this._weekLaneCounts(segments, grid.weekCount);
     const calendarViewportHeight = this._calendarViewportHeight(weekLaneCounts);
@@ -746,6 +747,39 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       .sort((a, b) => a._start - b._start || String(a.ship_name).localeCompare(String(b.ship_name)));
   }
 
+  _displaySailings(sailings) {
+    const grouped = new Map();
+    for (const sailing of sailings) {
+      const key = this._sailingGroupKey(sailing);
+      const current = grouped.get(key);
+      grouped.set(key, current ? this._preferredSailing(current, sailing) : sailing);
+    }
+    return Array.from(grouped.values()).sort(
+      (left, right) =>
+        left._start - right._start ||
+        String(left.ship_name || "").localeCompare(String(right.ship_name || "")) ||
+        String(left.id || "").localeCompare(String(right.id || "")),
+    );
+  }
+
+  _sailingGroupKey(sailing) {
+    return String(
+      sailing.source_sailing_id ||
+        `${sailing.ship_code || sailing.ship_name || ""}:${sailing.sail_date || ""}:${sailing.return_date || ""}`,
+    );
+  }
+
+  _preferredSailing(left, right) {
+    const leftExpiry = offerExpiryTime(left);
+    const rightExpiry = offerExpiryTime(right);
+    if (leftExpiry !== rightExpiry) {
+      return leftExpiry < rightExpiry ? left : right;
+    }
+    const leftOffer = compactJoin([left.offer_name, left.offer_code], " ");
+    const rightOffer = compactJoin([right.offer_name, right.offer_code], " ");
+    return leftOffer.localeCompare(rightOffer) <= 0 ? left : right;
+  }
+
   _filteredSailings() {
     return this._sailings.filter((sailing) =>
       FILTER_DEFINITIONS.every((definition) => {
@@ -882,7 +916,9 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
   _estimatedGridRows() {
     const grid = this._calendarModel();
-    const visibleSailings = this._visibleSailings(grid.start, grid.end);
+    const visibleSailings = this._displaySailings(
+      this._visibleSailings(grid.start, grid.end),
+    );
     const segments = this._segments(visibleSailings, grid.start, grid.weekCount);
     const weekLaneCounts = this._weekLaneCounts(segments, grid.weekCount);
     const calendarHeight = this._calendarViewportHeight(weekLaneCounts);
@@ -1070,9 +1106,12 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
 
   _afterFilterChanged() {
     this._resetCalendarScrollOnRender = true;
-    const filteredSailings = this._filteredSailings();
-    if (!filteredSailings.some((sailing) => String(sailing.id) === String(this._selectedId))) {
-      this._selectedId = filteredSailings[0]?.id;
+    const grid = this._calendarModel();
+    const visibleSailings = this._displaySailings(
+      this._visibleSailings(grid.start, grid.end, this._filteredSailings()),
+    );
+    if (!visibleSailings.some((sailing) => String(sailing.id) === String(this._selectedId))) {
+      this._selectedId = visibleSailings[0]?.id;
     }
     this._render();
   }
@@ -1084,7 +1123,10 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     this._filters = {};
     this._openFilterKey = undefined;
     this._resetCalendarScrollOnRender = true;
-    this._selectedId = this._sailings[0]?.id;
+    const grid = this._calendarModel();
+    this._selectedId = this._displaySailings(
+      this._visibleSailings(grid.start, grid.end, this._sailings),
+    )[0]?.id;
     this._render();
   }
 
@@ -1388,6 +1430,18 @@ function formatDate(value) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function offerExpiryTime(sailing) {
+  const reserveByDate = parseDate(sailing.reserve_by_date);
+  if (reserveByDate) {
+    return reserveByDate.getTime();
+  }
+  const sailByDate = parseDate(sailing.sail_by_date);
+  if (sailByDate) {
+    return sailByDate.getTime();
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 function compactJoin(values, separator) {

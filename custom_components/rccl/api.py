@@ -1194,11 +1194,18 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
             sailing_offer_labels,
             offer_type_name,
         )
+        source_sailing_id = _club_royale_source_sailing_id(
+            campaign_offer,
+            sailing,
+            sail_date,
+        )
         row = {
-            "id": str(
-                sailing.get("id")
-                or f"{campaign_offer.get('offerCode')}:{sailing.get('shipCode')}:{sail_date}"
+            "id": _club_royale_offer_sailing_id(
+                campaign_offer,
+                offer,
+                source_sailing_id,
             ),
+            "source_sailing_id": source_sailing_id,
             "sail_date": sail_date.isoformat(),
             "return_date": return_date.isoformat(),
             "total_nights": nights,
@@ -1227,6 +1234,34 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
         }
         rows.append({key: value for key, value in row.items() if value not in (None, "")})
     return rows
+
+
+def _club_royale_source_sailing_id(
+    campaign_offer: JsonObject,
+    sailing: JsonObject,
+    sail_date: date,
+) -> str:
+    """Return RCCL's voyage-level sailing id."""
+
+    return str(
+        sailing.get("id")
+        or f"{sailing.get('shipCode')}:{sail_date}"
+    )
+
+
+def _club_royale_offer_sailing_id(
+    campaign_offer: JsonObject,
+    offer: JsonObject,
+    source_sailing_id: str,
+) -> str:
+    """Return an entity-safe logical id for one offer+sailing row."""
+
+    offer_id = (
+        campaign_offer.get("offerCode")
+        or offer.get("campaignName")
+        or campaign_offer.get("name")
+    )
+    return f"{offer_id}:{source_sailing_id}" if offer_id else source_sailing_id
 
 
 def _sailing_name(sailing: JsonObject) -> str:

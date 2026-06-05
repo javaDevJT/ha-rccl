@@ -296,6 +296,8 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual(result[0]["itinerary_name"], "Bahamas & Perfect Day")
         self.assertEqual(result[0]["calendar_title"], "Bahamas & Perfect Day - Wonder of the Seas")
         self.assertEqual(result[0]["cabin_guarantee"], "Interior Guarantee")
+        self.assertEqual(result[0]["id"], "26SUM205:sailing-1")
+        self.assertEqual(result[0]["source_sailing_id"], "sailing-1")
         self.assertEqual(result[0]["offer_occupancy"], "two_passengers")
         self.assertEqual(result[0]["offer_occupancy_label"], "Two passengers")
         self.assertEqual(result[0]["offer_type"], "Complimentary")
@@ -320,10 +322,10 @@ class ApiHelperTest(unittest.TestCase):
         result = api.club_royale_sailings(data)
 
         by_id = {sailing["id"]: sailing for sailing in result}
-        self.assertEqual(by_id["sailing-1"]["offer_occupancy"], "one_passenger")
-        self.assertEqual(by_id["sailing-1"]["offer_occupancy_label"], "One passenger")
-        self.assertEqual(by_id["sailing-2"]["offer_occupancy"], "two_passengers")
-        self.assertEqual(by_id["sailing-2"]["offer_occupancy_label"], "Two passengers")
+        self.assertEqual(by_id["26SUM205:sailing-1"]["offer_occupancy"], "one_passenger")
+        self.assertEqual(by_id["26SUM205:sailing-1"]["offer_occupancy_label"], "One passenger")
+        self.assertEqual(by_id["26SUM206:sailing-2"]["offer_occupancy"], "two_passengers")
+        self.assertEqual(by_id["26SUM206:sailing-2"]["offer_occupancy_label"], "Two passengers")
 
     def test_club_royale_sailing_level_offer_terms_override_campaign(self) -> None:
         """Per-sailing fare and guest labels should beat campaign defaults."""
@@ -343,12 +345,33 @@ class ApiHelperTest(unittest.TestCase):
         result = api.club_royale_sailings(data)
 
         by_id = {sailing["id"]: sailing for sailing in result}
-        self.assertEqual(by_id["sailing-1"]["offer_type"], "Complimentary")
-        self.assertEqual(by_id["sailing-1"]["offer_occupancy"], "one_passenger")
-        self.assertEqual(by_id["sailing-1"]["offer_occupancy_label"], "One passenger")
-        self.assertEqual(by_id["sailing-2"]["offer_type"], "Reduced fare")
-        self.assertEqual(by_id["sailing-2"]["offer_occupancy"], "one_passenger")
-        self.assertEqual(by_id["sailing-2"]["offer_occupancy_label"], "One passenger")
+        self.assertEqual(by_id["26SUM205:sailing-1"]["offer_type"], "Complimentary")
+        self.assertEqual(by_id["26SUM205:sailing-1"]["offer_occupancy"], "one_passenger")
+        self.assertEqual(by_id["26SUM205:sailing-1"]["offer_occupancy_label"], "One passenger")
+        self.assertEqual(by_id["26SUM205:sailing-2"]["offer_type"], "Reduced fare")
+        self.assertEqual(by_id["26SUM205:sailing-2"]["offer_occupancy"], "one_passenger")
+        self.assertEqual(by_id["26SUM205:sailing-2"]["offer_occupancy_label"], "One passenger")
+
+    def test_club_royale_shared_voyage_ids_stay_distinct_per_offer(self) -> None:
+        """The same RCCL sailing should not collapse across different offers."""
+
+        data = copy.deepcopy(SAMPLE_CLUB_ROYALE_DATA)
+        offers = data["club_royale"]["offer_details"][0]["offers"]
+        first_offer = offers[0]
+        second_offer = copy.deepcopy(first_offer)
+        second_offer["campaignName"] = "Second Campaign"
+        second_offer["campaignOffer"]["offerCode"] = "26SUM206"
+        second_offer["campaignOffer"]["name"] = "Second Offer"
+        offers.append(second_offer)
+
+        result = api.club_royale_sailings(data)
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(
+            {sailing["id"] for sailing in result},
+            {"26SUM205:sailing-1", "26SUM206:sailing-1"},
+        )
+        self.assertEqual({sailing["source_sailing_id"] for sailing in result}, {"sailing-1"})
 
 
 class LoginTest(unittest.IsolatedAsyncioTestCase):
@@ -708,6 +731,13 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("_weekRowHeight", card_source)
         self.assertIn("_calendarViewportHeight", card_source)
         self.assertIn("_estimatedGridRows", card_source)
+        self.assertIn("_displaySailings", card_source)
+        self.assertIn("_sailingGroupKey", card_source)
+        self.assertIn("_preferredSailing", card_source)
+        self.assertIn("source_sailing_id", card_source)
+        self.assertIn("offerExpiryTime", card_source)
+        self.assertIn("reserve_by_date", card_source)
+        self.assertIn("sail_by_date", card_source)
         self.assertIn("_calendarScrollTop", card_source)
         self.assertIn("_currentCalendarScrollTop", card_source)
         self.assertIn("_restoreCalendarScroll", card_source)
@@ -792,8 +822,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.png").is_file())
         self.assertIn('"@javaDevJT"', manifest_source)
         self.assertIn('"http"', manifest_source)
-        self.assertIn('"version": "0.1.0"', manifest_source)
-        self.assertIn('version = "0.1.0"', pyproject_source)
+        self.assertIn('"version": "0.1.1"', manifest_source)
+        self.assertIn('version = "0.1.1"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
