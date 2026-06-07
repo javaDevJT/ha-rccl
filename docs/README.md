@@ -77,6 +77,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [research/2026-06-07-club-royale-offer-entities.md](research/2026-06-07-club-royale-offer-entities.md)
   records the offer-code entity, metadata, calendar, and stale-cleanup contract
   for Club Royale offers.
+- [research/2026-06-07-club-royale-calendar-and-duration-regression.md](research/2026-06-07-club-royale-calendar-and-duration-regression.md)
+  records the fix for one-day Club Royale bars and per-offer calendar entity
+  discovery.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -149,3 +152,5 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [publishing/v0.1.2-release-notes.md](publishing/v0.1.2-release-notes.md)
   describes the Club Royale offer-code date sensors and offer-expiration
   calendar entity.
+- [publishing/v0.1.3-release-notes.md](publishing/v0.1.3-release-notes.md)
+  describes the Club Royale duration fallback and per-offer calendar entities.

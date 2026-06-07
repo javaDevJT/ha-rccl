@@ -1344,10 +1344,10 @@ def _normalize_club_royale_offer_sailings(offer: JsonObject) -> list[JsonObject]
         sail_date = parse_rccl_date(sailing.get("sailDate"))
         if not sail_date:
             continue
-        nights = _int_or_default(sailing.get("totalNights"), 0)
-        return_date = sail_date + timedelta(days=max(nights, 0))
         ship_name = str(sailing.get("shipName") or sailing.get("shipCode") or "")
         itinerary_name = _sailing_name(sailing)
+        nights = _sailing_nights(sailing, itinerary_name)
+        return_date = sail_date + timedelta(days=max(nights, 0))
         room_types = _room_types(sailing)
         sailing_offer_labels = _sailing_offer_labels(sailing)
         occupancy_key, occupancy_label = _offer_occupancy(*sailing_offer_labels)
@@ -1538,6 +1538,43 @@ def _sailing_offer_type(
     if sailing.get("isCOMP") is True:
         return "Complimentary"
     return str(fallback) if fallback else None
+
+
+def _sailing_nights(sailing: JsonObject, itinerary_name: str | None = None) -> int:
+    """Return the number of nights for a Club Royale sailing."""
+
+    direct = _first_int(
+        sailing,
+        "totalNights",
+        "total_nights",
+        "numberOfNights",
+        "itineraryNightsQuantity",
+        "nights",
+    )
+    if direct is not None:
+        return direct
+
+    for value in (
+        itinerary_name,
+        sailing.get("itineraryName"),
+        sailing.get("itineraryDescription"),
+        _nested_name(sailing.get("sailingType")),
+        sailing.get("calendar_title"),
+        sailing.get("sailing_type"),
+    ):
+        nights = _nights_from_text(value)
+        if nights is not None:
+            return nights
+    return 0
+
+
+def _nights_from_text(value: Any) -> int | None:
+    """Extract a sailing duration from labels such as "4 Night Bahamas"."""
+
+    match = re.search(r"\b(\d{1,2})\s*night\b", str(value or ""), re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1))
 
 
 def _offer_occupancy(*values: Any) -> tuple[str | None, str | None]:

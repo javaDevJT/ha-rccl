@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -28,10 +29,46 @@ async def async_setup_entry(
         getattr(entry, "runtime_data", None) or hass.data[DOMAIN][entry.entry_id]
     )
     if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLUB_ROYALE:
-        async_add_entities([ClubRoyaleOfferCalendar(coordinator, entry)])
+        _async_setup_club_royale_calendars(hass, entry, coordinator, async_add_entities)
         return
 
     async_add_entities([RCCLCruiseCalendar(coordinator, entry.data[CONF_ACCOUNT_ID])])
+
+
+def _async_setup_club_royale_calendars(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: RCCLClubRoyaleDataUpdateCoordinator,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Club Royale offer expiration calendars."""
+
+    known_offer_codes: set[str] = set()
+
+    def add_offer_calendar_entities() -> None:
+        current_offers = _club_royale_offers(coordinator.data or {})
+        current_offer_codes = {_offer_code(offer) for offer in current_offers}
+        if isinstance(coordinator.data, dict) and "offers" in coordinator.data:
+            _remove_stale_club_royale_offer_calendars(
+                hass,
+                entry,
+                current_offer_codes,
+            )
+            known_offer_codes.intersection_update(current_offer_codes)
+
+        new_entities: list[ClubRoyaleOfferCalendar] = []
+        for offer in current_offers:
+            offer_code = _offer_code(offer)
+            if offer_code in known_offer_codes:
+                continue
+            known_offer_codes.add(offer_code)
+            new_entities.append(ClubRoyaleOfferCalendar(coordinator, entry, offer))
+        if new_entities:
+            async_add_entities(new_entities)
+
+    async_add_entities([ClubRoyaleOfferExpirationsCalendar(coordinator, entry)])
+    add_offer_calendar_entities()
+    entry.async_on_unload(coordinator.async_add_listener(add_offer_calendar_entities))
 
 
 class RCCLCruiseCalendar(CoordinatorEntity[RCCLDataUpdateCoordinator], CalendarEntity):
@@ -85,10 +122,10 @@ class RCCLCruiseCalendar(CoordinatorEntity[RCCLDataUpdateCoordinator], CalendarE
         return [_to_calendar_event(item) for item in cruise_events(self.coordinator.data or {})]
 
 
-class ClubRoyaleOfferCalendar(
+class ClubRoyaleOfferExpirationsCalendar(
     CoordinatorEntity[RCCLClubRoyaleDataUpdateCoordinator], CalendarEntity
 ):
-    """Read-only Club Royale offer expiration calendar."""
+    """Read-only Club Royale aggregate offer expiration calendar."""
 
     _attr_has_entity_name = False
     _attr_name = "Club Royale offer expirations"
@@ -139,6 +176,62 @@ class ClubRoyaleOfferCalendar(
             for offer in club_royale_offer_summaries(self.coordinator.data or {})
             if parse_rccl_date(offer.get("expiration_date"))
         ]
+
+
+class ClubRoyaleOfferCalendar(
+    CoordinatorEntity[RCCLClubRoyaleDataUpdateCoordinator], CalendarEntity
+):
+    """Read-only Club Royale calendar for one offer code."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:ticket-percent"
+
+    def __init__(
+        self,
+        coordinator: RCCLClubRoyaleDataUpdateCoordinator,
+        entry: ConfigEntry,
+        offer: dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self._offer_code = _offer_code(offer)
+        self._attr_name = f"Club Royale offer {self._offer_code}"
+        self._attr_unique_id = _club_royale_offer_calendar_unique_id(
+            entry,
+            self._offer_code,
+        )
+        self._attr_device_info = _club_royale_device_info(entry)
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        """Return this offer's expiration event."""
+
+        offer = self._offer()
+        if not offer or not parse_rccl_date(offer.get("expiration_date")):
+            return None
+        return _offer_to_calendar_event(offer)
+
+    async def async_get_events(
+        self,
+        hass: HomeAssistant,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> list[CalendarEvent]:
+        """Return this offer's expiration event within a date range."""
+
+        event = self.event
+        if not event:
+            return []
+        start = start_date.date()
+        end = end_date.date()
+        return [event] if event.end > start and event.start < end else []
+
+    def _offer(self) -> dict[str, Any] | None:
+        """Return the latest matching offer summary."""
+
+        for offer in _club_royale_offers(self.coordinator.data or {}):
+            if _offer_code(offer) == self._offer_code:
+                return offer
+        return None
 
 
 def _to_calendar_event(item: dict[str, Any]) -> CalendarEvent:
@@ -196,6 +289,65 @@ def _offer_description(offer: dict[str, Any]) -> str:
     if offer.get("cabin_guarantees"):
         lines.append(f"Cabins: {', '.join(offer['cabin_guarantees'])}")
     return "\n".join(lines)
+
+
+def _club_royale_offers(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normalized Club Royale offer summaries from coordinator data."""
+
+    return [
+        offer
+        for offer in club_royale_offer_summaries(data)
+        if (
+            isinstance(offer, dict)
+            and _offer_code(offer)
+            and parse_rccl_date(offer.get("expiration_date"))
+        )
+    ]
+
+
+def _remove_stale_club_royale_offer_calendars(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    current_offer_codes: set[str],
+) -> None:
+    """Remove dynamic offer calendars no longer in the latest data."""
+
+    registry = er.async_get(hass)
+    current_unique_ids = {
+        _club_royale_offer_calendar_unique_id(entry, offer_code)
+        for offer_code in current_offer_codes
+    }
+    prefix = f"{entry.entry_id}_club_royale_offer_calendar_"
+    for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if (
+            not registry_entry.unique_id
+            or not registry_entry.unique_id.startswith(prefix)
+        ):
+            continue
+        if registry_entry.unique_id in current_unique_ids:
+            continue
+        registry.async_remove(registry_entry.entity_id)
+
+
+def _offer_code(offer: dict[str, Any]) -> str:
+    """Return a stable Club Royale offer code."""
+
+    return str(offer.get("offer_code") or "").strip()
+
+
+def _club_royale_offer_calendar_unique_id(
+    entry: ConfigEntry,
+    offer_code: str,
+) -> str:
+    """Return the Home Assistant unique id for one offer calendar."""
+
+    return f"{entry.entry_id}_club_royale_offer_calendar_{_safe_id(offer_code)}"
+
+
+def _safe_id(value: str) -> str:
+    """Return a Home Assistant unique-id safe suffix."""
+
+    return "".join(char if char.isalnum() else "_" for char in value).strip("_")
 
 
 def _club_royale_device_info(entry: ConfigEntry) -> dict[str, Any]:

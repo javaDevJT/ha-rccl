@@ -352,6 +352,23 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual(by_id["26SUM205:sailing-2"]["offer_occupancy"], "one_passenger")
         self.assertEqual(by_id["26SUM205:sailing-2"]["offer_occupancy_label"], "One passenger")
 
+    def test_club_royale_sailing_nights_fall_back_to_title_labels(self) -> None:
+        """RCCL rows without totalNights should still span every impacted day."""
+
+        data = copy.deepcopy(SAMPLE_CLUB_ROYALE_DATA)
+        sailing = data["club_royale"]["offer_details"][0]["offers"][0]["campaignOffer"]["sailings"][0]
+        sailing.pop("totalNights")
+        sailing["sailDate"] = "2026-06-08"
+        sailing["itineraryName"] = "4 Night Key West Bahamas Cruise"
+        sailing["itineraryDescription"] = "4 NIGHT KEY WEST BAHAMAS CRUISE"
+        sailing["sailingType"] = {"name": "4 Night Key West Bahamas Cruise"}
+
+        result = api.club_royale_sailings(data)
+
+        self.assertEqual(result[0]["total_nights"], 4)
+        self.assertEqual(result[0]["impacted_days"], 5)
+        self.assertEqual(result[0]["return_date"], "2026-06-12")
+
     def test_club_royale_shared_voyage_ids_stay_distinct_per_offer(self) -> None:
         """The same RCCL sailing should not collapse across different offers."""
 
@@ -850,8 +867,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.png").is_file())
         self.assertIn('"@javaDevJT"', manifest_source)
         self.assertIn('"http"', manifest_source)
-        self.assertIn('"version": "0.1.2"', manifest_source)
-        self.assertIn('version = "0.1.2"', pyproject_source)
+        self.assertIn('"version": "0.1.3"', manifest_source)
+        self.assertIn('version = "0.1.3"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
@@ -946,6 +963,9 @@ class SourceContractTest(unittest.TestCase):
         calendar_source = (
             ROOT / "custom_components" / "rccl" / "calendar.py"
         ).read_text()
+        card_source = (
+            ROOT / "custom_components" / "rccl" / "www" / "club-royale-calendar-card.js"
+        ).read_text()
         sensor_source = (ROOT / "custom_components" / "rccl" / "sensor.py").read_text()
 
         self.assertIn("entity_registry", sensor_source)
@@ -961,8 +981,12 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn('CLUB_ROYALE_PLATFORMS = ["sensor", "calendar"]', const_source)
         self.assertIn("ENTRY_TYPE_CLUB_ROYALE", calendar_source)
         self.assertIn("ClubRoyaleOfferCalendar", calendar_source)
+        self.assertIn("known_offer_codes.intersection_update", calendar_source)
+        self.assertIn("_club_royale_offer_calendar_unique_id", calendar_source)
         self.assertIn("club_royale_offer_summaries", calendar_source)
         self.assertIn("club_royale_offer_expirations", calendar_source)
+        self.assertIn("returnDateForSailing", card_source)
+        self.assertIn("nightsFromText", card_source)
 
 
 if __name__ == "__main__":

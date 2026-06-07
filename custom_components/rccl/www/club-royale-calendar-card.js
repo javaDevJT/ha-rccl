@@ -741,7 +741,8 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
       .map((sailing) => ({
         ...sailing,
         _start: parseDate(sailing.sail_date),
-        _end: parseDate(sailing.return_date),
+        return_date: returnDateForSailing(sailing),
+        _end: parseDate(returnDateForSailing(sailing)),
       }))
       .filter((sailing) => sailing._start && sailing._end && sailing._start <= end && sailing._end >= start)
       .sort((a, b) => a._start - b._start || String(a.ship_name).localeCompare(String(b.ship_name)));
@@ -1304,13 +1305,15 @@ class RCCLClubRoyaleCalendarCard extends HTMLElement {
     const id = String(attrs.sailing_id || attrs.id || entityId);
     const itineraryName = attrs.itinerary_name || attrs.friendly_name || "Club Royale sailing";
     const shipName = attrs.ship_name || "";
-    return {
+    const normalized = {
       ...attrs,
       id,
       entity_id: entityId,
       sail_date: sailDate,
       calendar_title: attrs.calendar_title || (shipName ? `${itineraryName} - ${shipName}` : itineraryName),
     };
+    normalized.return_date = returnDateForSailing(normalized);
+    return normalized;
   }
 
   _hasClubRoyaleEntitySource() {
@@ -1430,6 +1433,62 @@ function formatDate(value) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function returnDateForSailing(sailing) {
+  const start = parseDate(sailing.sail_date);
+  const explicit = parseDate(sailing.return_date);
+  const nights = sailingDurationNights(sailing);
+  if (start && Number.isFinite(nights) && nights > 0) {
+    const derived = addDays(start, nights);
+    if (!explicit || explicit <= start || explicit < derived) {
+      return dateString(derived);
+    }
+  }
+  return explicit ? dateString(explicit) : sailing.return_date;
+}
+
+function sailingDurationNights(sailing) {
+  for (const value of [
+    sailing.total_nights,
+    sailing.totalNights,
+    sailing.number_of_nights,
+    sailing.numberOfNights,
+    sailing.itineraryNightsQuantity,
+    sailing.nights,
+  ]) {
+    const nights = Number(value);
+    if (Number.isFinite(nights) && nights > 0) {
+      return nights;
+    }
+  }
+  return nightsFromText(
+    compactJoin(
+      [
+        sailing.calendar_title,
+        sailing.itinerary_name,
+        sailing.itineraryName,
+        sailing.itinerary_description,
+        sailing.itineraryDescription,
+        sailing.sailing_type,
+        sailing.sailingType?.name,
+      ],
+      " ",
+    ),
+  );
+}
+
+function nightsFromText(value) {
+  const match = String(value || "").match(/\b(\d{1,2})\s*night\b/i);
+  return match ? Number(match[1]) : Number.NaN;
+}
+
+function dateString(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function offerExpiryTime(sailing) {
