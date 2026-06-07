@@ -74,6 +74,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [research/2026-06-05-club-royale-offer-sailing-identity.md](research/2026-06-05-club-royale-offer-sailing-identity.md)
   records the HAR evidence and fix for Club Royale sailings collapsing across
   offers that share RCCL voyage ids.
+- [research/2026-06-07-club-royale-offer-entities.md](research/2026-06-07-club-royale-offer-entities.md)
+  records the offer-code entity, metadata, calendar, and stale-cleanup contract
+  for Club Royale offers.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -143,3 +146,6 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   describes the first stable release for HACS default-repository readiness.
 - [publishing/v0.1.1-release-notes.md](publishing/v0.1.1-release-notes.md)
   describes the offer-scoped Club Royale sailing identity fix.
+- [publishing/v0.1.2-release-notes.md](publishing/v0.1.2-release-notes.md)
+  describes the Club Royale offer-code date sensors and offer-expiration
+  calendar entity.

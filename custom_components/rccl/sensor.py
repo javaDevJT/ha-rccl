@@ -15,6 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import (
+    club_royale_offer_summaries,
     crown_anchor_value,
     loyalty_summary,
     next_booking,
@@ -124,27 +125,47 @@ def _async_setup_club_royale_sensors(
     """Set up Club Royale offer sensors from a config entry."""
 
     known_sailing_ids: set[str] = set()
+    known_offer_codes: set[str] = set()
 
-    def add_sailing_entities() -> None:
-        current_sailings = _club_royale_sailings(coordinator.data or {})
+    def add_club_royale_entities() -> None:
+        data = coordinator.data or {}
+        current_sailings = _club_royale_sailings(data)
+        current_offers = _club_royale_offers(data)
         current_sailing_ids = {_sailing_id(sailing) for sailing in current_sailings}
-        if isinstance(coordinator.data, dict) and "sailings" in coordinator.data:
-            _remove_stale_club_royale_entities(hass, entry, current_sailing_ids)
+        current_offer_codes = {_offer_code(offer) for offer in current_offers}
+        if (
+            isinstance(coordinator.data, dict)
+            and "sailings" in coordinator.data
+            and "offers" in coordinator.data
+        ):
+            _remove_stale_club_royale_entities(
+                hass,
+                entry,
+                current_sailing_ids,
+                current_offer_codes,
+            )
             known_sailing_ids.intersection_update(current_sailing_ids)
+            known_offer_codes.intersection_update(current_offer_codes)
 
-        new_entities: list[ClubRoyaleSailingSensor] = []
+        new_entities: list[ClubRoyaleSailingSensor | ClubRoyaleOfferSensor] = []
         for sailing in current_sailings:
             sailing_id = _sailing_id(sailing)
             if sailing_id in known_sailing_ids:
                 continue
             known_sailing_ids.add(sailing_id)
             new_entities.append(ClubRoyaleSailingSensor(coordinator, entry, sailing))
+        for offer in current_offers:
+            offer_code = _offer_code(offer)
+            if offer_code in known_offer_codes:
+                continue
+            known_offer_codes.add(offer_code)
+            new_entities.append(ClubRoyaleOfferSensor(coordinator, entry, offer))
         if new_entities:
             async_add_entities(new_entities)
 
     async_add_entities([ClubRoyaleSummarySensor(coordinator, entry)])
-    add_sailing_entities()
-    entry.async_on_unload(coordinator.async_add_listener(add_sailing_entities))
+    add_club_royale_entities()
+    entry.async_on_unload(coordinator.async_add_listener(add_club_royale_entities))
 
 
 class RCCLSensor(CoordinatorEntity[RCCLDataUpdateCoordinator], SensorEntity):
@@ -276,6 +297,55 @@ class ClubRoyaleSailingSensor(
         return {"id": self._sailing_id}
 
 
+class ClubRoyaleOfferSensor(
+    CoordinatorEntity[RCCLClubRoyaleDataUpdateCoordinator], SensorEntity
+):
+    """Club Royale offer expiration sensor."""
+
+    _attr_has_entity_name = False
+    _attr_device_class = SensorDeviceClass.DATE
+    _attr_icon = "mdi:ticket-percent"
+
+    def __init__(
+        self,
+        coordinator: RCCLClubRoyaleDataUpdateCoordinator,
+        entry: ConfigEntry,
+        offer: dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._offer_code = _offer_code(offer)
+        self._attr_name = f"Club Royale offer {self._offer_code}"
+        self._attr_unique_id = _club_royale_offer_unique_id(entry, self._offer_code)
+        self._attr_device_info = _club_royale_device_info(entry)
+
+    @property
+    def native_value(self) -> date | None:
+        """Return the offer expiration date."""
+
+        return parse_rccl_date(self._offer().get("expiration_date"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return offer details for Home Assistant."""
+
+        offer = self._offer()
+        return {
+            **offer,
+            "integration": DOMAIN,
+            "entity_kind": "club_royale_offer",
+            "offer_code": self._offer_code,
+        }
+
+    def _offer(self) -> dict[str, Any]:
+        """Return the latest matching offer summary."""
+
+        for offer in _club_royale_offers(self.coordinator.data or {}):
+            if _offer_code(offer) == self._offer_code:
+                return offer
+        return {"offer_code": self._offer_code}
+
+
 def _club_royale_sailings(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Return normalized Club Royale sailings from coordinator data."""
 
@@ -283,23 +353,46 @@ def _club_royale_sailings(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [sailing for sailing in sailings if isinstance(sailing, dict)]
 
 
+def _club_royale_offers(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normalized Club Royale offer summaries from coordinator data."""
+
+    offers = data.get("offers", [])
+    if isinstance(offers, list):
+        filtered = [
+            offer
+            for offer in offers
+            if isinstance(offer, dict) and str(offer.get("offer_code") or "").strip()
+        ]
+        if filtered:
+            return filtered
+    return club_royale_offer_summaries(data)
+
+
 def _remove_stale_club_royale_entities(
     hass: HomeAssistant,
     entry: ConfigEntry,
     current_sailing_ids: set[str],
+    current_offer_codes: set[str],
 ) -> None:
-    """Remove dynamic sailing sensors that are no longer in the latest data."""
+    """Remove dynamic Club Royale sensors no longer in the latest data."""
 
     registry = er.async_get(hass)
     current_unique_ids = {
         _club_royale_sailing_unique_id(entry, sailing_id)
         for sailing_id in current_sailing_ids
     }
-    prefix = f"{entry.entry_id}_club_royale_sailing_"
+    current_unique_ids.update(
+        _club_royale_offer_unique_id(entry, offer_code)
+        for offer_code in current_offer_codes
+    )
+    prefixes = (
+        f"{entry.entry_id}_club_royale_sailing_",
+        f"{entry.entry_id}_club_royale_offer_",
+    )
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if (
             not registry_entry.unique_id
-            or not registry_entry.unique_id.startswith(prefix)
+            or not registry_entry.unique_id.startswith(prefixes)
         ):
             continue
         if registry_entry.unique_id in current_unique_ids:
@@ -316,10 +409,22 @@ def _sailing_id(sailing: dict[str, Any]) -> str:
     )
 
 
+def _offer_code(offer: dict[str, Any]) -> str:
+    """Return a stable Club Royale offer code."""
+
+    return str(offer.get("offer_code") or "").strip()
+
+
 def _club_royale_sailing_unique_id(entry: ConfigEntry, sailing_id: str) -> str:
     """Return the Home Assistant unique id for one sailing sensor."""
 
     return f"{entry.entry_id}_club_royale_sailing_{_safe_id(sailing_id)}"
+
+
+def _club_royale_offer_unique_id(entry: ConfigEntry, offer_code: str) -> str:
+    """Return the Home Assistant unique id for one offer sensor."""
+
+    return f"{entry.entry_id}_club_royale_offer_{_safe_id(offer_code)}"
 
 
 def _safe_id(value: str) -> str:

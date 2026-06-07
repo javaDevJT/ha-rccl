@@ -45,4 +45,4 @@ REQ_APP_ID = "RCL-WEB"
 REQ_APP_VERSION = "1.0.0"
 
 PLATFORMS = ["sensor", "calendar"]
-CLUB_ROYALE_PLATFORMS = ["sensor"]
+CLUB_ROYALE_PLATFORMS = ["sensor", "calendar"]

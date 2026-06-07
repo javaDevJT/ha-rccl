@@ -1060,6 +1060,103 @@ def club_royale_sailings(data: JsonObject) -> list[JsonObject]:
     return sorted(rows, key=lambda item: (item["sail_date"], item["ship_name"]))
 
 
+def club_royale_offer_summaries(data: JsonObject) -> list[JsonObject]:
+    """Return one metadata summary for each Club Royale offer code."""
+
+    raw_sailings = data.get("sailings")
+    if isinstance(raw_sailings, list):
+        sailings = [sailing for sailing in raw_sailings if isinstance(sailing, dict)]
+    elif (
+        isinstance(data.get("offers"), list)
+        and any(
+            isinstance(offer, dict) and offer.get("offer_code")
+            for offer in data["offers"]
+        )
+    ):
+        return sorted(
+            [
+                offer
+                for offer in data["offers"]
+                if isinstance(offer, dict) and offer.get("offer_code")
+            ],
+            key=lambda item: (
+                parse_rccl_date(item.get("expiration_date")) or date.max,
+                str(item.get("offer_code") or ""),
+            ),
+        )
+    else:
+        sailings = club_royale_sailings(data)
+
+    grouped: dict[str, list[JsonObject]] = {}
+    for sailing in sailings:
+        offer_code = str(sailing.get("offer_code") or "").strip()
+        if not offer_code:
+            continue
+        grouped.setdefault(offer_code, []).append(sailing)
+
+    summaries = []
+    for offer_code, rows in grouped.items():
+        ordered_rows = sorted(
+            rows,
+            key=lambda item: (
+                str(item.get("sail_date") or ""),
+                str(item.get("ship_name") or ""),
+                str(item.get("source_sailing_id") or item.get("id") or ""),
+            ),
+        )
+        expiration_date = _min_date_string(
+            row.get("reserve_by_date") for row in ordered_rows
+        )
+        sail_by_date = _max_date_string(row.get("sail_by_date") for row in ordered_rows)
+        sail_dates = _unique_strings(row.get("sail_date") for row in ordered_rows)
+        summary = {
+            "offer_code": offer_code,
+            "offer_name": _first_string(row.get("offer_name") for row in ordered_rows),
+            "expiration_date": expiration_date,
+            "reserve_by_date": expiration_date,
+            "sail_by_date": sail_by_date,
+            "offer_type": _first_string(row.get("offer_type") for row in ordered_rows),
+            "offer_occupancy": _first_string(
+                row.get("offer_occupancy") for row in ordered_rows
+            ),
+            "offer_occupancy_label": _first_string(
+                row.get("offer_occupancy_label") for row in ordered_rows
+            ),
+            "sailing_count": len(ordered_rows),
+            "sailing_ids": _unique_strings(row.get("id") for row in ordered_rows),
+            "source_sailing_ids": _unique_strings(
+                row.get("source_sailing_id") for row in ordered_rows
+            ),
+            "ship_names": _unique_strings(row.get("ship_name") for row in ordered_rows),
+            "itinerary_names": _unique_strings(
+                row.get("itinerary_name") for row in ordered_rows
+            ),
+            "departure_ports": _unique_strings(
+                _port_label(row.get("departure_port")) for row in ordered_rows
+            ),
+            "cabin_guarantees": _unique_strings(
+                row.get("cabin_guarantee") for row in ordered_rows
+            ),
+            "number_of_nights": _unique_ints(
+                row.get("total_nights") for row in ordered_rows
+            ),
+            "sail_dates": sail_dates,
+            "first_sail_date": sail_dates[0] if sail_dates else None,
+            "last_sail_date": sail_dates[-1] if sail_dates else None,
+        }
+        summaries.append(
+            {key: value for key, value in summary.items() if value not in (None, "", [])}
+        )
+
+    return sorted(
+        summaries,
+        key=lambda item: (
+            parse_rccl_date(item.get("expiration_date")) or date.max,
+            str(item.get("offer_code") or ""),
+        ),
+    )
+
+
 def cruise_events(data: JsonObject) -> list[JsonObject]:
     """Build normalized all-day cruise events from booking/history data."""
 
@@ -1131,6 +1228,74 @@ def _description(*, nights: int, status: Any, package: Any, ship: Any) -> str:
     if status:
         parts.append(f"Status: {status}")
     return "\n".join(parts)
+
+
+def _first_string(values: Any) -> str | None:
+    """Return the first non-empty string from an iterable."""
+
+    for value in values:
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def _unique_strings(values: Any) -> list[str]:
+    """Return unique non-empty strings while preserving encounter order."""
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in (None, ""):
+            continue
+        text = str(value)
+        if text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _unique_ints(values: Any) -> list[int]:
+    """Return unique integer values while preserving encounter order."""
+
+    result: list[int] = []
+    seen: set[int] = set()
+    for value in values:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number in seen:
+            continue
+        seen.add(number)
+        result.append(number)
+    return result
+
+
+def _min_date_string(values: Any) -> str | None:
+    """Return the earliest parsed date as an ISO string."""
+
+    parsed = [value for value in (parse_rccl_date(item) for item in values) if value]
+    return min(parsed).isoformat() if parsed else None
+
+
+def _max_date_string(values: Any) -> str | None:
+    """Return the latest parsed date as an ISO string."""
+
+    parsed = [value for value in (parse_rccl_date(item) for item in values) if value]
+    return max(parsed).isoformat() if parsed else None
+
+
+def _port_label(value: Any) -> str | None:
+    """Return a readable port label from normalized port data."""
+
+    if not isinstance(value, dict):
+        return str(value) if value else None
+    name = value.get("name")
+    code = value.get("code")
+    if name and code:
+        return f"{name} ({code})"
+    return str(name or code) if name or code else None
 
 
 def _int_or_default(value: Any, default: int) -> int:

@@ -10,7 +10,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import RCCLApiError, RCCLAuthenticationError, RCCLClient, club_royale_sailings
+from .api import (
+    RCCLApiError,
+    RCCLAuthenticationError,
+    RCCLClient,
+    club_royale_offer_summaries,
+    club_royale_sailings,
+)
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,9 +81,10 @@ class RCCLClubRoyaleDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]])
                 self._loyalty_id
             )
             sailings = club_royale_sailings({"club_royale": club_royale})
+            offers = club_royale_offer_summaries({"sailings": sailings})
         except RCCLAuthenticationError as err:
             raise UpdateFailed(f"Club Royale login failed: {err}") from err
         except RCCLApiError as err:
             raise UpdateFailed(str(err)) from err
 
-        return {"sailings": sailings}
+        return {"sailings": sailings, "offers": offers}

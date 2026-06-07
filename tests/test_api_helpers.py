@@ -373,6 +373,34 @@ class ApiHelperTest(unittest.TestCase):
         )
         self.assertEqual({sailing["source_sailing_id"] for sailing in result}, {"sailing-1"})
 
+    def test_club_royale_offer_summaries_group_sailings_by_offer_code(self) -> None:
+        """Offer-code summaries should expose expiration dates and metadata."""
+
+        data = copy.deepcopy(SAMPLE_CLUB_ROYALE_DATA)
+        offers = data["club_royale"]["offer_details"][0]["offers"]
+        second_offer = copy.deepcopy(offers[0])
+        second_offer["campaignName"] = "Second Campaign"
+        second_offer["campaignOffer"]["offerCode"] = "26SUM206"
+        second_offer["campaignOffer"]["name"] = "Second Offer"
+        second_offer["campaignOffer"]["reserveByDate"] = "2026-06-01T03:59:00.000Z"
+        second_offer["campaignOffer"]["sailings"][0]["id"] = "sailing-2"
+        second_offer["campaignOffer"]["sailings"][0]["sailDate"] = "2026-07-03"
+        offers.append(second_offer)
+        sailings = api.club_royale_sailings(data)
+
+        result = api.club_royale_offer_summaries({"sailings": sailings})
+
+        by_code = {offer["offer_code"]: offer for offer in result}
+        self.assertEqual([offer["offer_code"] for offer in result], ["26SUM206", "26SUM205"])
+        self.assertEqual(by_code["26SUM205"]["expiration_date"], "2026-06-11")
+        self.assertEqual(by_code["26SUM205"]["sailing_count"], 1)
+        self.assertEqual(by_code["26SUM205"]["sailing_ids"], ["26SUM205:sailing-1"])
+        self.assertEqual(by_code["26SUM205"]["source_sailing_ids"], ["sailing-1"])
+        self.assertEqual(by_code["26SUM205"]["ship_names"], ["Wonder of the Seas"])
+        self.assertEqual(by_code["26SUM205"]["offer_type"], "Complimentary")
+        self.assertEqual(by_code["26SUM205"]["offer_occupancy_label"], "Two passengers")
+        self.assertEqual(by_code["26SUM205"]["sail_by_date"], "2026-10-31")
+
 
 class LoginTest(unittest.IsolatedAsyncioTestCase):
     """Exercise login parsing without Home Assistant."""
@@ -822,8 +850,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.png").is_file())
         self.assertIn('"@javaDevJT"', manifest_source)
         self.assertIn('"http"', manifest_source)
-        self.assertIn('"version": "0.1.1"', manifest_source)
-        self.assertIn('version = "0.1.1"', pyproject_source)
+        self.assertIn('"version": "0.1.2"', manifest_source)
+        self.assertIn('version = "0.1.2"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
@@ -914,6 +942,10 @@ class SourceContractTest(unittest.TestCase):
     def test_club_royale_sailing_entities_are_cleaned_up(self) -> None:
         """Stale Club Royale sailing entities should be removed automatically."""
 
+        const_source = (ROOT / "custom_components" / "rccl" / "const.py").read_text()
+        calendar_source = (
+            ROOT / "custom_components" / "rccl" / "calendar.py"
+        ).read_text()
         sensor_source = (ROOT / "custom_components" / "rccl" / "sensor.py").read_text()
 
         self.assertIn("entity_registry", sensor_source)
@@ -921,6 +953,16 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("async_entries_for_config_entry", sensor_source)
         self.assertIn("registry.async_remove", sensor_source)
         self.assertIn("known_sailing_ids.intersection_update", sensor_source)
+        self.assertIn("ClubRoyaleOfferSensor", sensor_source)
+        self.assertIn("club_royale_offer", sensor_source)
+        self.assertIn("_club_royale_offer_unique_id", sensor_source)
+        self.assertIn("known_offer_codes.intersection_update", sensor_source)
+        self.assertIn("club_royale_offer_summaries", sensor_source)
+        self.assertIn('CLUB_ROYALE_PLATFORMS = ["sensor", "calendar"]', const_source)
+        self.assertIn("ENTRY_TYPE_CLUB_ROYALE", calendar_source)
+        self.assertIn("ClubRoyaleOfferCalendar", calendar_source)
+        self.assertIn("club_royale_offer_summaries", calendar_source)
+        self.assertIn("club_royale_offer_expirations", calendar_source)
 
 
 if __name__ == "__main__":
