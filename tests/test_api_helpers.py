@@ -867,8 +867,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.png").is_file())
         self.assertIn('"@javaDevJT"', manifest_source)
         self.assertIn('"http"', manifest_source)
-        self.assertIn('"version": "0.1.3"', manifest_source)
-        self.assertIn('version = "0.1.3"', pyproject_source)
+        self.assertIn('"version": "0.1.4"', manifest_source)
+        self.assertIn('version = "0.1.4"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
@@ -976,13 +976,14 @@ class SourceContractTest(unittest.TestCase):
         self.assertIn("ClubRoyaleOfferSensor", sensor_source)
         self.assertIn("club_royale_offer", sensor_source)
         self.assertIn("_club_royale_offer_unique_id", sensor_source)
+        self.assertIn("_club_royale_offer_name", sensor_source)
         self.assertIn("known_offer_codes.intersection_update", sensor_source)
         self.assertIn("club_royale_offer_summaries", sensor_source)
         self.assertIn('CLUB_ROYALE_PLATFORMS = ["sensor", "calendar"]', const_source)
         self.assertIn("ENTRY_TYPE_CLUB_ROYALE", calendar_source)
-        self.assertIn("ClubRoyaleOfferCalendar", calendar_source)
-        self.assertIn("known_offer_codes.intersection_update", calendar_source)
-        self.assertIn("_club_royale_offer_calendar_unique_id", calendar_source)
+        self.assertIn("ClubRoyaleOfferExpirationsCalendar", calendar_source)
+        self.assertNotIn("class ClubRoyaleOfferCalendar", calendar_source)
+        self.assertNotIn("_club_royale_offer_calendar_unique_id", calendar_source)
         self.assertIn("club_royale_offer_summaries", calendar_source)
         self.assertIn("club_royale_offer_expirations", calendar_source)
         self.assertIn("returnDateForSailing", card_source)

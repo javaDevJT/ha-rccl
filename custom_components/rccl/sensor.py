@@ -315,7 +315,7 @@ class ClubRoyaleOfferSensor(
         super().__init__(coordinator)
         self._entry = entry
         self._offer_code = _offer_code(offer)
-        self._attr_name = f"Club Royale offer {self._offer_code}"
+        self._attr_name = _club_royale_offer_name(offer)
         self._attr_unique_id = _club_royale_offer_unique_id(entry, self._offer_code)
         self._attr_device_info = _club_royale_device_info(entry)
 
@@ -413,6 +413,18 @@ def _offer_code(offer: dict[str, Any]) -> str:
     """Return a stable Club Royale offer code."""
 
     return str(offer.get("offer_code") or "").strip()
+
+
+def _club_royale_offer_name(offer: dict[str, Any]) -> str:
+    """Return a human-readable name for a Club Royale offer sensor."""
+
+    offer_code = _offer_code(offer)
+    offer_name = str(offer.get("offer_name") or "").strip()
+    if offer_name and offer_code:
+        return f"Club Royale {offer_name} ({offer_code})"
+    if offer_name:
+        return f"Club Royale {offer_name}"
+    return f"Club Royale offer {offer_code}" if offer_code else "Club Royale offer"
 
 
 def _club_royale_sailing_unique_id(entry: ConfigEntry, sailing_id: str) -> str:

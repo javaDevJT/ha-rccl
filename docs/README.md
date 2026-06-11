@@ -80,6 +80,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [research/2026-06-07-club-royale-calendar-and-duration-regression.md](research/2026-06-07-club-royale-calendar-and-duration-regression.md)
   records the fix for one-day Club Royale bars and per-offer calendar entity
   discovery.
+- [research/2026-06-10-club-royale-offer-entity-deduplication.md](research/2026-06-10-club-royale-offer-entity-deduplication.md)
+  records the removal of duplicate per-offer calendar entities and the friendly
+  offer sensor naming contract.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -154,3 +157,6 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
   calendar entity.
 - [publishing/v0.1.3-release-notes.md](publishing/v0.1.3-release-notes.md)
   describes the Club Royale duration fallback and per-offer calendar entities.
+- [publishing/v0.1.4-release-notes.md](publishing/v0.1.4-release-notes.md)
+  describes Club Royale per-offer calendar cleanup and friendly offer sensor
+  names.
