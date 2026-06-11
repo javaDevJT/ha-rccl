@@ -15,6 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import (
+    club_royale_offer_sensor_attributes,
     club_royale_offer_summaries,
     crown_anchor_value,
     loyalty_summary,
@@ -331,7 +332,7 @@ class ClubRoyaleOfferSensor(
 
         offer = self._offer()
         return {
-            **offer,
+            **club_royale_offer_sensor_attributes(offer),
             "integration": DOMAIN,
             "entity_kind": "club_royale_offer",
             "offer_code": self._offer_code,

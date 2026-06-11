@@ -418,6 +418,40 @@ class ApiHelperTest(unittest.TestCase):
         self.assertEqual(by_code["26SUM205"]["offer_occupancy_label"], "Two passengers")
         self.assertEqual(by_code["26SUM205"]["sail_by_date"], "2026-10-31")
 
+    def test_club_royale_offer_sensor_attributes_stay_recorder_safe(self) -> None:
+        """Offer date sensors should not expose huge arrays to recorder."""
+
+        offer = {
+            "offer_code": "26TIER3",
+            "offer_name": "Tier Cruise Fare",
+            "expiration_date": "2027-04-01",
+            "reserve_by_date": "2027-04-01",
+            "sail_by_date": "2027-12-31",
+            "offer_type": "Complimentary",
+            "offer_occupancy_label": "Two passengers",
+            "sailing_count": 600,
+            "sailing_ids": [f"26TIER3:sailing-{index}" for index in range(600)],
+            "source_sailing_ids": [f"sailing-{index}" for index in range(600)],
+            "ship_names": [f"Ship {index}" for index in range(40)],
+            "itinerary_names": [f"Itinerary {index}" for index in range(120)],
+            "departure_ports": [f"Port {index}" for index in range(50)],
+            "cabin_guarantees": [f"Cabin {index}" for index in range(30)],
+            "number_of_nights": list(range(3, 15)),
+            "sail_dates": [f"2027-01-{(index % 28) + 1:02d}" for index in range(600)],
+            "first_sail_date": "2027-01-01",
+            "last_sail_date": "2027-12-31",
+        }
+
+        result = api.club_royale_offer_sensor_attributes(offer)
+
+        self.assertLess(len(json.dumps(result)), 16_384)
+        self.assertNotIn("sailing_ids", result)
+        self.assertNotIn("source_sailing_ids", result)
+        self.assertNotIn("sail_dates", result)
+        self.assertEqual(result["sailing_count"], 600)
+        self.assertEqual(result["ship_names_omitted"], 28)
+        self.assertEqual(result["itinerary_names_omitted"], 108)
+
 
 class LoginTest(unittest.IsolatedAsyncioTestCase):
     """Exercise login parsing without Home Assistant."""
@@ -867,8 +901,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.png").is_file())
         self.assertIn('"@javaDevJT"', manifest_source)
         self.assertIn('"http"', manifest_source)
-        self.assertIn('"version": "0.1.4"', manifest_source)
-        self.assertIn('version = "0.1.4"', pyproject_source)
+        self.assertIn('"version": "0.1.5"', manifest_source)
+        self.assertIn('version = "0.1.5"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,
@@ -915,6 +949,23 @@ class SourceContractTest(unittest.TestCase):
         )[1]
         self.assertIn("except RCCLAuthenticationError as err:", club_coordinator)
         self.assertIn('UpdateFailed(f"Club Royale login failed: {err}")', club_coordinator)
+
+    def test_account_reload_transient_login_token_errors_are_nonblocking(self) -> None:
+        """Account reload should retry transient RCCL login-token failures later."""
+
+        init_source = (ROOT / "custom_components" / "rccl" / "__init__.py").read_text()
+        account_setup = init_source.split("async def async_setup_entry", 1)[1]
+        account_setup = account_setup.split("async def async_unload_entry", 1)[0]
+
+        self.assertIn("_is_transient_login_token_error", init_source)
+        self.assertIn("_fallback_credentials_from_entry", init_source)
+        self.assertIn("_async_refresh_account_later", init_source)
+        self.assertIn("except RCCLAuthenticationError as err:", account_setup)
+        self.assertIn("_is_transient_login_token_error(err)", account_setup)
+        self.assertIn("_fallback_credentials_from_entry(entry)", account_setup)
+        self.assertIn("async_config_entry_first_refresh", account_setup)
+        self.assertIn("except ConfigEntryAuthFailed as err:", account_setup)
+        self.assertIn("async_create_task(_async_refresh_account_later", account_setup)
 
     def test_club_royale_sessions_are_ha_managed_and_reuse_entry_credentials(self) -> None:
         """Club Royale should not close HA sessions or immediately relogin every poll."""

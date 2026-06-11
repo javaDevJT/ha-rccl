@@ -54,6 +54,7 @@ _OFFER_LABEL_KEY_RE = re.compile(
     r"(offer|fare|rate|price|pricing|promo|promotion|discount|guest|passenger|comp)",
     re.IGNORECASE,
 )
+_OFFER_SENSOR_LIST_LIMIT = 12
 
 JsonObject = dict[str, Any]
 
@@ -1157,6 +1158,50 @@ def club_royale_offer_summaries(data: JsonObject) -> list[JsonObject]:
     )
 
 
+def club_royale_offer_sensor_attributes(offer: JsonObject) -> JsonObject:
+    """Return Recorder-safe attributes for one Club Royale offer sensor."""
+
+    attributes: JsonObject = {}
+    for key in (
+        "offer_code",
+        "offer_name",
+        "expiration_date",
+        "reserve_by_date",
+        "sail_by_date",
+        "offer_type",
+        "offer_occupancy",
+        "offer_occupancy_label",
+        "sailing_count",
+        "first_sail_date",
+        "last_sail_date",
+    ):
+        value = offer.get(key)
+        if value not in (None, "", []):
+            attributes[key] = value
+
+    for key in ("sailing_ids", "source_sailing_ids", "sail_dates"):
+        values = offer.get(key)
+        if isinstance(values, list):
+            attributes[f"{key}_count"] = len(values)
+        elif values not in (None, "", []):
+            attributes[f"{key}_count"] = 1
+
+    for key in (
+        "ship_names",
+        "itinerary_names",
+        "departure_ports",
+        "cabin_guarantees",
+        "number_of_nights",
+    ):
+        values, omitted = _compact_offer_attribute_list(offer.get(key))
+        if values:
+            attributes[key] = values
+        if omitted:
+            attributes[f"{key}_omitted"] = omitted
+
+    return attributes
+
+
 def cruise_events(data: JsonObject) -> list[JsonObject]:
     """Build normalized all-day cruise events from booking/history data."""
 
@@ -1270,6 +1315,19 @@ def _unique_ints(values: Any) -> list[int]:
         seen.add(number)
         result.append(number)
     return result
+
+
+def _compact_offer_attribute_list(values: Any) -> tuple[list[Any], int]:
+    """Return a bounded, non-empty list plus omitted count."""
+
+    if not isinstance(values, list):
+        return ([values], 0) if values not in (None, "", []) else ([], 0)
+
+    compact = [value for value in values if value not in (None, "", [])]
+    return (
+        compact[:_OFFER_SENSOR_LIST_LIMIT],
+        max(len(compact) - _OFFER_SENSOR_LIST_LIMIT, 0),
+    )
 
 
 def _min_date_string(values: Any) -> str | None:

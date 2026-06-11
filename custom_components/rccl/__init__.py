@@ -66,10 +66,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return await _async_setup_club_royale_entry(hass, entry)
 
     session = async_get_clientsession(hass)
+    transient_login_failure = False
     try:
         credentials = await _credentials_from_entry(hass, session, entry)
     except RCCLAuthenticationError as err:
-        raise ConfigEntryAuthFailed(str(err)) from err
+        if _is_transient_login_token_error(err) and entry.data.get(CONF_ACCOUNT_ID):
+            _LOGGER.warning(
+                "RCCL did not return a login token during setup; using stored "
+                "entry credentials and retrying after setup"
+            )
+            credentials = _fallback_credentials_from_entry(entry)
+            transient_login_failure = True
+        else:
+            raise ConfigEntryAuthFailed(str(err)) from err
     except RCCLApiError as err:
         raise ConfigEntryNotReady(str(err)) from err
 
@@ -82,11 +91,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         client,
         update_interval=interval,
     )
-    await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryAuthFailed as err:
+        if not _is_transient_login_token_error(err):
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            entry.runtime_data = None
+            raise
+        _LOGGER.warning(
+            "RCCL did not return a login token during initial refresh; setup "
+            "will continue and retry in background"
+        )
+        transient_login_failure = True
+    except Exception:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        entry.runtime_data = None
+        raise
+
     await hass.config_entries.async_forward_entry_setups(entry, _platforms_for_entry(entry))
+    if transient_login_failure:
+        refresh_task = hass.async_create_task(_async_refresh_account_later(coordinator))
+        entry.async_on_unload(refresh_task.cancel)
     return True
 
 
@@ -144,6 +172,15 @@ async def _async_refresh_club_royale_later(
         _LOGGER.debug("Initial Club Royale refresh failed: %s", err)
 
 
+async def _async_refresh_account_later(coordinator: RCCLDataUpdateCoordinator) -> None:
+    """Refresh RCCL account data without blocking config-entry reload."""
+
+    try:
+        await coordinator.async_request_refresh()
+    except Exception as err:  # noqa: BLE001 - keep setup alive for visible entities.
+        _LOGGER.debug("Deferred RCCL account refresh failed: %s", err)
+
+
 def _platforms_for_entry(entry: ConfigEntry) -> list[str]:
     """Return Home Assistant platforms for this RCCL entry type."""
 
@@ -176,6 +213,28 @@ def _club_royale_credentials_from_entry(entry: ConfigEntry) -> RCCLCredentials:
         or f"{DEFAULT_WEB_BASE_URL}/club-royale/signin",
         authorize_referer=entry.data.get(CONF_AUTHORIZE_REFERER)
         or f"{DEFAULT_WEB_BASE_URL}/",
+    )
+
+
+def _is_transient_login_token_error(err: BaseException) -> bool:
+    """Return true for RCCL's intermittent empty OpenAM login response."""
+
+    return "did not return a login token" in str(err)
+
+
+def _fallback_credentials_from_entry(entry: ConfigEntry) -> RCCLCredentials:
+    """Build best-effort credentials from a stored account config entry."""
+
+    return RCCLCredentials(
+        access_token=str(entry.data.get(CONF_ACCESS_TOKEN) or ""),
+        account_id=str(entry.data[CONF_ACCOUNT_ID]),
+        app_key=entry.data.get(CONF_APP_KEY, DEFAULT_APP_KEY),
+        vds_id=entry.data.get(CONF_VDS_ID) or entry.data.get(CONF_ACCOUNT_ID),
+        refresh_token=entry.data.get(CONF_REFRESH_TOKEN),
+        id_token=entry.data.get(CONF_ID_TOKEN),
+        expires_at=entry.data.get(CONF_TOKEN_EXPIRES_AT),
+        username=entry.data.get(CONF_USERNAME),
+        password=entry.data.get(CONF_PASSWORD),
     )
 
 
