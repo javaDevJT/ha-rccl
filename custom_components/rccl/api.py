@@ -49,7 +49,6 @@ _USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
 )
-_CLUB_ROYALE_APPROVED_AGENCY_IDS = ["109638", "388809"]
 _OFFER_LABEL_KEY_RE = re.compile(
     r"(offer|fare|rate|price|pricing|promo|promotion|discount|guest|passenger|comp)",
     re.IGNORECASE,
@@ -395,14 +394,13 @@ class RCCLClient:
         await self.async_prime_club_royale_session()
 
         offers = await self._web_request(
-            "POST",
-            "/api/casino/v2/offers/merged",
+            "GET",
+            "/api/casino/v2/offers/list",
             loyalty_id=loyalty_id,
-            json_body={
+            params={
                 "sortBy": "offer.reserveByDate",
                 "sortDirection": "asc",
                 "limit": 100,
-                "approvedAgencyIds": _CLUB_ROYALE_APPROVED_AGENCY_IDS,
                 "page": 1,
                 "digitalRedemption": True,
             },
@@ -418,17 +416,16 @@ class RCCLClient:
                 continue
             detail_fetches.append(
                 self._web_request(
-                    "POST",
-                    "/api/casino/v2/offers/merged",
+                    "GET",
+                    "/api/casino/v2/offers/details",
                     loyalty_id=loyalty_id,
-                    json_body={
+                    params={
                         "offerCode": offer_code,
                         "playerOfferId": player_offer_id,
                         "sortBy": "offer.reserveByDate",
                         "sortDirection": "asc",
                         "limit": 1,
                         "page": 1,
-                        "approvedAgencyIds": _CLUB_ROYALE_APPROVED_AGENCY_IDS,
                         "digitalRedemption": True,
                     },
                 )
@@ -678,6 +675,7 @@ class RCCLClient:
         *,
         loyalty_id: str,
         json_body: JsonObject | None = None,
+        params: dict[str, Any] | None = None,
         retry_auth: bool = True,
     ) -> JsonObject:
         """Issue an RCCL web API request."""
@@ -692,6 +690,7 @@ class RCCLClient:
                 url,
                 headers=headers,
                 json_body=json_body,
+                params=params,
             )
         except RCCLAuthenticationError as err:
             if retry_auth and self._credentials.username and self._credentials.password:
@@ -705,6 +704,7 @@ class RCCLClient:
                     path,
                     loyalty_id=loyalty_id,
                     json_body=json_body,
+                    params=params,
                     retry_auth=False,
                 )
             raise

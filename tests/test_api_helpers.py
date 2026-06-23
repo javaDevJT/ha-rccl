@@ -601,14 +601,18 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result["offer_details"]), 1)
         self.assertEqual(len(session.calls), 3)
         self.assertTrue(session.calls[0]["url"].endswith("/club-royale/offers"))
-        self.assertTrue(session.calls[1]["url"].endswith("/api/casino/v2/offers/merged"))
+        self.assertEqual(session.calls[1]["method"], "GET")
+        self.assertTrue(session.calls[1]["url"].endswith("/api/casino/v2/offers/list"))
         self.assertEqual(session.calls[1]["headers"]["x-account-id"], "account-123")
         self.assertEqual(session.calls[1]["headers"]["x-loyalty-id"], "364350586")
         self.assertEqual(session.calls[1]["headers"]["authorization"], "Bearer access")
-        self.assertEqual(session.calls[1]["json"]["limit"], 100)
-        self.assertEqual(session.calls[2]["json"]["offerCode"], "26SUM205")
-        self.assertEqual(session.calls[2]["json"]["playerOfferId"], "player-offer-1")
-        self.assertEqual(session.calls[2]["json"]["limit"], 1)
+        self.assertEqual(session.calls[1]["params"]["limit"], 100)
+        self.assertEqual(session.calls[1]["params"]["digitalRedemption"], True)
+        self.assertEqual(session.calls[2]["method"], "GET")
+        self.assertTrue(session.calls[2]["url"].endswith("/api/casino/v2/offers/details"))
+        self.assertEqual(session.calls[2]["params"]["offerCode"], "26SUM205")
+        self.assertEqual(session.calls[2]["params"]["playerOfferId"], "player-offer-1")
+        self.assertEqual(session.calls[2]["params"]["limit"], 1)
 
     async def test_async_get_data_does_not_fetch_club_royale(self) -> None:
         """Core account setup should not use the separate Club Royale session."""
@@ -745,9 +749,33 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
             "https://api.rccl.com/en/royal/web/v3/guestAccounts",
         )
         self.assertTrue(session.calls[3]["url"].endswith("/club-royale/offers"))
-        self.assertTrue(session.calls[4]["url"].endswith("/api/casino/v2/offers/merged"))
+        self.assertEqual(session.calls[4]["method"], "GET")
+        self.assertTrue(session.calls[4]["url"].endswith("/api/casino/v2/offers/list"))
         self.assertEqual(session.calls[4]["headers"]["authorization"], "Bearer access")
-        self.assertIn("/api/casino/v2/offers/merged", session.calls[5]["url"])
+        self.assertEqual(
+            session.calls[4]["params"],
+            {
+                "sortBy": "offer.reserveByDate",
+                "sortDirection": "asc",
+                "limit": 100,
+                "page": 1,
+                "digitalRedemption": True,
+            },
+        )
+        self.assertEqual(session.calls[5]["method"], "GET")
+        self.assertTrue(session.calls[5]["url"].endswith("/api/casino/v2/offers/details"))
+        self.assertEqual(
+            session.calls[5]["params"],
+            {
+                "offerCode": "26SUM205",
+                "playerOfferId": "player-offer-1",
+                "sortBy": "offer.reserveByDate",
+                "sortDirection": "asc",
+                "limit": 1,
+                "page": 1,
+                "digitalRedemption": True,
+            },
+        )
 
 
 class SourceContractTest(unittest.TestCase):
@@ -901,8 +929,8 @@ class SourceContractTest(unittest.TestCase):
         self.assertTrue((brand_dir / "logo.png").is_file())
         self.assertIn('"@javaDevJT"', manifest_source)
         self.assertIn('"http"', manifest_source)
-        self.assertIn('"version": "0.1.5"', manifest_source)
-        self.assertIn('version = "0.1.5"', pyproject_source)
+        self.assertIn('"version": "0.1.6"', manifest_source)
+        self.assertIn('version = "0.1.6"', pyproject_source)
         self.assertIn(
             "https://www.royalcaribbean.com/myaccount/assets/images/royal/logo.svg",
             generator_source,

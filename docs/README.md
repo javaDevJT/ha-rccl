@@ -86,6 +86,9 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [research/2026-06-10-account-reload-auth-and-offer-attributes.md](research/2026-06-10-account-reload-auth-and-offer-attributes.md)
   records the account reload missing-token fallback and Recorder-safe Club
   Royale offer sensor attribute contract.
+- [research/2026-06-22-club-royale-api-drift.md](research/2026-06-22-club-royale-api-drift.md)
+  records the Club Royale API drift from `POST /offers/merged` to GET list and
+  detail endpoints.
 - [design/2026-06-01-component-design.md](design/2026-06-01-component-design.md)
   explains the login-based component design and the Home Assistant entities.
 - [design/2026-06-01-club-royale-card.md](design/2026-06-01-club-royale-card.md)
@@ -166,3 +169,6 @@ reproduces the Home Assistant aiohttp request stack for Club Royale debugging.
 - [publishing/v0.1.5-release-notes.md](publishing/v0.1.5-release-notes.md)
   describes the account reload missing-token fallback and compact Club Royale
   offer sensor attributes.
+- [publishing/v0.1.6-release-notes.md](publishing/v0.1.6-release-notes.md)
+  describes the Club Royale API drift from the retired merged endpoint to the
+  new list/detail endpoints.
