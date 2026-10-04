@@ -14,8 +14,11 @@ permissions:
 jobs:
   test:
     name: Unit and syntax checks
-    runs-on: truenas-ha-rccl
+    runs-on: truenas-ha-rccl-storage-8g
     steps:
+      - name: Prepare disk dependency cache
+        id: ci_disk_cache_downloads
+        run: ci-cache downloads
       - name: Check out repository
         uses: actions/checkout@v4
 
