@@ -957,6 +957,9 @@ class SourceContractTest(unittest.TestCase):
         hacs_image_resolver = (
             ROOT / ".github" / "scripts" / "resolve-hacs-image.py"
         ).read_text()
+        hassfest_dockerfile = (
+            ROOT / ".github" / "scripts" / "hassfest-remote-validator.Dockerfile"
+        ).read_text()
         hassfest_helper = (
             ROOT / ".github" / "scripts" / "ha-validators.sh"
         ).read_text()
@@ -1061,18 +1064,44 @@ class SourceContractTest(unittest.TestCase):
             "bash .ci/trusted-adapter/.github/scripts/ha-validators.sh hassfest",
             hassfest_workflow,
         )
+        self.assertIn("cache-binary: false", hassfest_workflow)
+        self.assertIn("driver: remote", hassfest_workflow)
+        self.assertIn("endpoint: tcp://buildkit:1234", hassfest_workflow)
         self.assertIn(
-            'CORE_REPOSITORY="https://github.com/home-assistant/core.git"',
-            hassfest_helper,
+            "cacert=/run/buildkit/tls/ca.pem", hassfest_workflow
         )
-        self.assertRegex(hassfest_helper, r'CORE_COMMIT="[0-9a-f]{40}"')
+        self.assertIn("cert=/run/buildkit/tls/client.pem", hassfest_workflow)
+        self.assertIn("key=/run/buildkit/tls/client.key", hassfest_workflow)
+
         self.assertIn(
-            'git -C "$core_source" fetch --quiet --filter=blob:none '
-            '--depth=1 origin "$CORE_COMMIT"',
-            hassfest_helper,
+            "ARG HASSFEST_IMAGE=ghcr.io/home-assistant/hassfest@sha256:"
+            "4b1adfb1e0a37710af0390708eb8000230b80b2193ccffbeed0a901fa9765181",
+            hassfest_dockerfile,
         )
-        self.assertIn('[[ "$actual_commit" == "$CORE_COMMIT" ]]', hassfest_helper)
-        self.assertIn('/bin/sh "$entrypoint" "$@"', hassfest_helper)
+        self.assertIn(
+            'os.execv("/bin/sh", ["/bin/sh", '
+            '"/usr/src/homeassistant/script/hassfest/docker/entrypoint.sh", *args])',
+            hassfest_dockerfile,
+        )
+        self.assertIn("FROM scratch AS result", hassfest_dockerfile)
+        self.assertIn(
+            "COPY --from=validator /out/validator.log /validator.log",
+            hassfest_dockerfile,
+        )
+        self.assertIn(
+            "COPY --from=validator /out/exit-code /exit-code",
+            hassfest_dockerfile,
+        )
+        self.assertIn("--target result", hassfest_helper)
+        self.assertIn(
+            '--output "type=local,dest=$adapter_tmp/result"', hassfest_helper
+        )
+        self.assertIn('status="$(cat "$adapter_tmp/result/exit-code")"', hassfest_helper)
+        self.assertIn('exit "$status"', hassfest_helper)
+        self.assertNotIn("--push", hassfest_helper)
+        self.assertNotIn("--load", hassfest_helper)
+        self.assertNotIn("type=registry", hassfest_helper)
+        self.assertNotIn("type=image", hassfest_helper)
 
         self.assertIn("python -m unittest discover -s tests -q", tests_workflow)
 
