@@ -937,23 +937,144 @@ class SourceContractTest(unittest.TestCase):
         )
 
     def test_hacs_default_submission_files_are_present(self) -> None:
-        """Default HACS repositories expect validation workflows and metadata."""
+        """HACS metadata and both validation gates stay current and trusted."""
 
         init_source = (ROOT / "custom_components" / "rccl" / "__init__.py").read_text()
         workflows = ROOT / ".github" / "workflows"
         license_source = (ROOT / "LICENSE").read_text()
         codeowners_source = (ROOT / ".github" / "CODEOWNERS").read_text()
+        pyproject_source = (ROOT / "pyproject.toml").read_text()
+        manifest = json.loads(
+            (ROOT / "custom_components" / "rccl" / "manifest.json").read_text()
+        )
+        hacs_metadata = json.loads((ROOT / "hacs.json").read_text())
         hacs_workflow = (workflows / "hacs.yml").read_text()
         hassfest_workflow = (workflows / "hassfest.yml").read_text()
         tests_workflow = (workflows / "tests.yml").read_text()
+        hacs_dockerfile = (
+            ROOT / ".github" / "scripts" / "hacs-remote-validator.Dockerfile"
+        ).read_text()
+        hacs_image_resolver = (
+            ROOT / ".github" / "scripts" / "resolve-hacs-image.py"
+        ).read_text()
+        hassfest_helper = (
+            ROOT / ".github" / "scripts" / "ha-validators.sh"
+        ).read_text()
 
         self.assertIn("MIT License", license_source)
         self.assertIn("@javaDevJT", codeowners_source)
-        self.assertIn("hacs/action@main", hacs_workflow)
-        self.assertIn("category: integration", hacs_workflow)
-        self.assertIn("home-assistant/actions/hassfest@master", hassfest_workflow)
-        self.assertIn("python -m unittest discover -s tests -q", tests_workflow)
+        self.assertEqual(manifest["domain"], "rccl")
+        self.assertEqual(manifest["name"], "Royal Caribbean")
+        self.assertEqual(hacs_metadata["name"], manifest["name"])
+        self.assertTrue(hacs_metadata["render_readme"])
+        self.assertIn("homeassistant", hacs_metadata)
+        self.assertIn('version = "' + manifest["version"] + '"', pyproject_source)
         self.assertIn("CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)", init_source)
+
+        self.assertIn("name: HACS", hacs_workflow)
+        self.assertIn("on:\n  push:\n  pull_request:", hacs_workflow)
+        self.assertIn("runs-on: truenas-ha-rccl-storage-8g", hacs_workflow)
+        self.assertIn(
+            "ref: ${{ github.event.pull_request.base.sha || github.sha }}",
+            hacs_workflow,
+        )
+        self.assertIn("persist-credentials: false", hacs_workflow)
+        self.assertIn("driver: remote", hacs_workflow)
+        self.assertIn("endpoint: tcp://buildkit:1234", hacs_workflow)
+        self.assertIn("cacert=${{ env.BUILDKIT_TLS_CA_CERT }}", hacs_workflow)
+        self.assertIn("cert=${{ env.BUILDKIT_TLS_CLIENT_CERT }}", hacs_workflow)
+        self.assertIn("key=${{ env.BUILDKIT_TLS_CLIENT_KEY }}", hacs_workflow)
+        self.assertIn(
+            "run: python3 .github/scripts/resolve-hacs-image.py",
+            hacs_workflow,
+        )
+        self.assertIn("id: hacs-image", hacs_workflow)
+        self.assertIn(
+            "HACS_ACTION_IMAGE=${{ steps.hacs-image.outputs.image }}",
+            hacs_workflow,
+        )
+        self.assertIn("INPUT_CATEGORY=integration", hacs_workflow)
+        self.assertIn(
+            'rm -rf -- "$RUNNER_TEMP/hacs-context" "$RUNNER_TEMP/hacs-result"',
+            hacs_workflow,
+        )
+        self.assertIn('mkdir -p "$RUNNER_TEMP/hacs-context"', hacs_workflow)
+        self.assertIn(
+            'cp .github/scripts/hacs-remote-validator.Dockerfile '
+            '"$RUNNER_TEMP/hacs-context/Dockerfile"',
+            hacs_workflow,
+        )
+        self.assertIn("context: ${{ runner.temp }}/hacs-context", hacs_workflow)
+        self.assertIn("secret-envs: hacs-token=HACS_GITHUB_TOKEN", hacs_workflow)
+        self.assertIn(
+            "secret-files: github-event=${{ github.event_path }}",
+            hacs_workflow,
+        )
+        self.assertIn("target: result", hacs_workflow)
+        self.assertIn(
+            'test "$(cat "$RUNNER_TEMP/hacs-result/exit-code")" = 0',
+            hacs_workflow,
+        )
+
+        self.assertIn('REGISTRY = "https://ghcr.io"', hacs_image_resolver)
+        self.assertIn('IMAGE = "hacs/action"', hacs_image_resolver)
+        self.assertIn('TAG = "main"', hacs_image_resolver)
+        self.assertIn('image = f"ghcr.io/{IMAGE}@{index_digest}"', hacs_image_resolver)
+        self.assertIn(
+            'if hashlib.sha256(raw).hexdigest() != digest.removeprefix("sha256:"):',
+            hacs_image_resolver,
+        )
+        self.assertIn(
+            'EXPECTED_ENTRYPOINT = ["python3", "/hacs/action.py"]',
+            hacs_image_resolver,
+        )
+        self.assertIn('EXPECTED_WORKDIR = "/hacs"', hacs_image_resolver)
+
+        self.assertIn(
+            "ARG HACS_ACTION_IMAGE\nFROM ${HACS_ACTION_IMAGE} AS validator",
+            hacs_dockerfile,
+        )
+        self.assertIn("RUN mkdir -p /github/workspace", hacs_dockerfile)
+        self.assertIn("--mount=type=secret,id=hacs-token", hacs_dockerfile)
+        self.assertIn("--mount=type=secret,id=github-event", hacs_dockerfile)
+        self.assertIn(
+            'INPUT_GITHUB_TOKEN="$(cat /run/secrets/hacs-token)" '
+            'python3 /hacs/action.py',
+            hacs_dockerfile,
+        )
+        self.assertIn("FROM scratch AS result", hacs_dockerfile)
+        self.assertIn(
+            "COPY --from=validator /out/exit-code /exit-code",
+            hacs_dockerfile,
+        )
+
+        self.assertIn("name: Hassfest", hassfest_workflow)
+        self.assertIn("on:\n  push:\n  pull_request:", hassfest_workflow)
+        self.assertIn("runs-on: truenas-ha-rccl-storage-8g", hassfest_workflow)
+        self.assertIn("path: .ci/trusted-adapter", hassfest_workflow)
+        self.assertIn(
+            "ref: ${{ github.event.pull_request.base.sha || github.sha }}",
+            hassfest_workflow,
+        )
+        self.assertIn("persist-credentials: false", hassfest_workflow)
+        self.assertIn(
+            "bash .ci/trusted-adapter/.github/scripts/ha-validators.sh hassfest",
+            hassfest_workflow,
+        )
+        self.assertIn(
+            'CORE_REPOSITORY="https://github.com/home-assistant/core.git"',
+            hassfest_helper,
+        )
+        self.assertRegex(hassfest_helper, r'CORE_COMMIT="[0-9a-f]{40}"')
+        self.assertIn(
+            'git -C "$core_source" fetch --quiet --filter=blob:none '
+            '--depth=1 origin "$CORE_COMMIT"',
+            hassfest_helper,
+        )
+        self.assertIn('[[ "$actual_commit" == "$CORE_COMMIT" ]]', hassfest_helper)
+        self.assertIn('/bin/sh "$entrypoint" "$@"', hassfest_helper)
+
+        self.assertIn("python -m unittest discover -s tests -q", tests_workflow)
 
     def test_club_royale_menu_labels_and_setup_are_nonblocking(self) -> None:
         """Club Royale setup should show labels and not fail on initial refresh."""
@@ -1071,3 +1192,4 @@ class SourceContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
